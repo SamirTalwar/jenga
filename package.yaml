@@ -9,8 +9,16 @@ github:              Nick-Chapman/jenga2.git
 dependencies:
 - base >= 4.7 && < 5
 - containers
+- directory
+- filepath
+- process
+- split
+- unix
 
 default-extensions:
+- DuplicateRecordFields
+- GADTs
+- ImportQualifiedPost
 - LambdaCase
 - NamedFieldPuns
 - ScopedTypeVariables
