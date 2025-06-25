@@ -53,12 +53,10 @@ setupLinkRule exe xs =
   let obs = [ oKey x | x <- xs ]
   GRule $ Rule
     { tag = printf "LINK-%s" (show exe)
-    , targets = [exe]
-    , deps = obs
-    , action = Action
-      { command = printf "gcc %s -o %s" (baseKeys obs) (baseKey exe)
-      , inputs = substore obs
-      , outputs = substore [exe] }}
+    , targets = locateKeys [exe]
+    , deps = locateKeys obs
+    , command = printf "gcc %s -o %s" (baseKeys obs) (baseKey exe)
+    }
 
 setupCrule :: String -> G ()
 setupCrule x = do
@@ -66,12 +64,13 @@ setupCrule x = do
   let o = oKey x
   GRule $ Rule
     { tag = printf "CC-%s" x
-    , targets = [o]
-    , deps = [c]
-    , action = Action
-      { command = printf "gcc -c %s -o %s" (baseKey c) (baseKey o)
-      , inputs = substore [c]
-      , outputs = substore [o] }}
+    , targets = locateKeys [o]
+    , deps = locateKeys [c]
+    , command = printf "gcc -c %s -o %s" (baseKey c) (baseKey o)
+    }
+
+locateKeys :: [Key] -> KeyMap
+locateKeys ks = KeyMap (Map.fromList [ (k, baseRelPath rp) | k@(Key rp) <- ks ])
 
 cKey :: String -> Key
 cKey x = Key (RelPath (x++".c"))
@@ -101,10 +100,6 @@ listBaseNamesWithSuffix dir sought = do
        , suf == sought
        ]
 
-substore :: [Key] -> SubStore
-substore ks = SubStore (Map.fromList [ (baseRelPath rp, k)
-                                     | k@(Key rp) <- ks ])
-
 baseKeys :: [Key] -> String
 baseKeys = intercalate " " . map baseKey
 
@@ -129,19 +124,18 @@ data G a where
   GExists :: RelPath -> G Bool
   GReadKey :: Key -> G String
 
-data Rule = Rule { tag :: String, targets :: [Key], deps :: [Key], action :: Action }
+data Rule = Rule
+  { tag :: String
+  , targets :: KeyMap
+  , deps :: KeyMap
+  , command :: String
+  }
 
 data Key = Key RelPath deriving (Eq,Ord)
 
-data Action = Action
-  { command :: String
-  , inputs :: SubStore
-  , outputs :: SubStore
-  }
+data KeyMap = KeyMap (Map Key RelPath)
 
-data SubStore = SubStore (Map RelPath Key)
-
-data RelPath = RelPath String deriving (Eq,Ord)
+data RelPath = RelPath String deriving (Eq,Ord) -- TODO: renamae Location -- doc is relative
 
 ----------------------------------------------------------------------
 -- show
@@ -268,15 +262,15 @@ runGenerate config@Config{seeE} m = loop m sys0 k0
 ----------------------------------------------------------------------
 -- Build
 
-data RuleOrSource = R Rule Int | S RelPath
+data RuleOrSource = R Rule RelPath | S RelPath -- TODO: better name?
 
 data Witness = Witness { key :: WitnessKey, val :: WitnessValue }
 
-data WitnessKey = WitnessKey { command :: String, deps :: StoreWit } deriving Show
+data WitnessKey = WitnessKey { command :: String, wdeps :: StoreWit } deriving Show
 
-data WitnessValue = WitnessValue { wtargets :: StoreWit } -- TODO: and stdout?
+data WitnessValue = WitnessValue { wtargets :: StoreWit }
 
-data StoreWit = StoreWit (Map RelPath Checksum) deriving Show
+data StoreWit = StoreWit (Map RelPath Checksum) deriving Show -- TODO: better name WitMap
 
 data Checksum = Checksum String
 
@@ -299,7 +293,7 @@ doBuild Config{seeB} System{sources,rules} roots = mapM demand roots
     log mes = when seeB $ BLog (printf "B: %s" mes)
 
     xs1 = [ (key, S rp) | key@(Key rp) <- sources ]
-    xs2 = [ (key, R rule i) | rule@Rule{targets} <- rules, (i,key) <- zip [0..] targets ]
+    xs2 = [ (key, R rule rp) | rule@Rule{targets=KeyMap m} <- rules, (key,rp) <- Map.toList m ]
 
     -- TODO: check no duplicate ways to build a key; better still caller will have checked
     how :: Map Key RuleOrSource
@@ -318,35 +312,38 @@ doBuild Config{seeB} System{sources,rules} roots = mapM demand roots
               checksum <- Execute (insertIntoCache rp)
               pure checksum
 
-            R rule i -> do
+            -- TODO: document this flow...
+            R rule rpTarget -> do
               log $ printf "Consult: %s" (show rule)
-              let Rule{deps,action,targets} = rule
-              let Action{inputs,command,outputs} = action
-              depSums <- mapM demand deps
-              let witKey = WitnessKey { command, deps = makeStoreWit deps depSums inputs}
+              let Rule{command,targets,deps=KeyMap deps} = rule
+
+              wdeps <- (StoreWit . Map.fromList) <$>
+                sequence [ do checksum <- demand key; pure (rp,checksum)
+                         | (key,rp) <- Map.toList deps
+                         ]
+
+              let witKey = WitnessKey { command, wdeps }
               wks <- hashWitnessKey witKey
               verifyWitness wks >>= \case
-                Just wit -> do
-                  let Witness{val} = wit
-                  let WitnessValue{wtargets} = val
-                  pure (checksumOfKey outputs wtargets key)
+                Just Witness{val=WitnessValue{wtargets}} -> do
+                  pure (lookStoreWit (lookKeyMap key targets) wtargets)
+
                 Nothing -> do
                   log $ printf "Execute: %s" (show rule)
-                  targetSums <- buildWithRule depSums rule
-                  let val = WitnessValue { wtargets = makeStoreWit targets targetSums outputs }
+                  wtargets <- buildWithRule wdeps rule
+                  let val = WitnessValue { wtargets }
                   let wit = Witness { key = witKey, val }
                   saveWitness wks wit
-                  let checksum = targetSums!!i
+                  let checksum = lookStoreWit rpTarget wtargets
                   pure checksum
 
-makeStoreWit :: [Key] -> [Checksum] -> SubStore -> StoreWit
-makeStoreWit keys sums (SubStore m1) = do
-  let xs = zip keys sums
-  let m :: Map Key Checksum
-      m = Map.fromList xs
-  let look :: Key -> Checksum
-      look k = maybe undefined id $ Map.lookup k m
-  StoreWit (Map.fromList [ (rp,look key) | (rp,key) <- Map.toList m1 ])
+lookStoreWit :: RelPath -> StoreWit -> Checksum
+lookStoreWit rp (StoreWit m) = maybe err id $ Map.lookup rp m
+  where err = error "lookStoreWit"
+
+lookKeyMap :: Key -> KeyMap -> RelPath
+lookKeyMap key (KeyMap m) = maybe err id $ Map.lookup key m
+  where err = error "lookKeyMap"
 
 data WitKeySum = WitKeySum String
 
@@ -380,12 +377,6 @@ lookupWitness wks = Execute $ do
 existsCacheFile :: Checksum -> B Bool
 existsCacheFile checksum = Execute (XExists (cacheFile checksum))
 
-checksumOfKey :: SubStore -> StoreWit -> Key -> Checksum
-checksumOfKey (SubStore m1) (StoreWit m2) sought = do
-  let the = \case [] -> error "checksumOfKey/m1"; x:_ -> x
-  let look rp = maybe (error "checksumOfKey/m2") id $ Map.lookup rp m2
-  look (the [ rp | (rp, key) <- Map.toList m1, key == sought ])
-
 saveWitness :: WitKeySum -> Witness -> B ()
 saveWitness wks wit = do
   let witFile = tracesDir </> show wks
@@ -393,39 +384,32 @@ saveWitness wks wit = do
     XMakeDir (dirRelPath witFile)
     XWriteFile (importWitness wit ++ "\n") witFile
 
-buildWithRule :: [Checksum] -> Rule -> B [Checksum]
-buildWithRule depSums rule = do
+buildWithRule :: StoreWit -> Rule -> B StoreWit
+buildWithRule depWit rule = do
   sandbox <- NewSandbox
-  let Rule{deps,action} = rule
-  let Action{command,inputs,outputs} = action
+  let Rule{command,targets} = rule
   Execute (XMakeDir sandbox)
-  Execute (setupInputs sandbox inputs deps depSums)
+  Execute (setupInputs sandbox depWit)
   Execute (XRunCommandInDir sandbox command)
-  targetSums <- Execute (cacheOutputs sandbox outputs)
+  targetWit <- Execute (cacheOutputs sandbox targets)
   Execute (XRemoveDirRecursive sandbox)
-  pure targetSums
+  pure targetWit
 
-setupInputs :: RelPath -> SubStore -> [Key] -> [Checksum] -> X ()
-setupInputs sandbox (SubStore m1) keys sums = do
-  let m2 :: Map Key Checksum = Map.fromList (zip keys sums)
-  let look :: Key -> Checksum
-      look k = maybe undefined id $ Map.lookup k m2
-  let
-    setupDep :: RelPath -> Key -> X ()
-    setupDep rp key = do
-      let checksum = look key
-      let inputFile = sandbox </> show rp
-      XHardLink (cacheFile checksum) inputFile
-  sequence_ [ setupDep fp key | (fp,key) <- Map.toList m1 ]
+setupInputs :: RelPath -> StoreWit -> X ()
+setupInputs sandbox (StoreWit m1) = do
+  sequence_
+    [ XHardLink (cacheFile checksum) (sandbox </> show rp)
+    | (rp,checksum) <- Map.toList m1
+    ]
 
-cacheOutputs :: RelPath -> SubStore -> X [Checksum]
-cacheOutputs sandbox (SubStore m1) = do
-  let
-    cacheOutput :: RelPath -> X Checksum
-    cacheOutput rp = do
-      let outputFile = sandbox </> show rp
-      insertIntoCache outputFile
-  sequence [ cacheOutput fp | (fp,_) <- Map.toList m1 ]
+cacheOutputs :: RelPath -> KeyMap -> X StoreWit
+cacheOutputs sandbox (KeyMap m1) = do
+  StoreWit . Map.fromList <$> sequence
+    [ do
+        checksum <- insertIntoCache (sandbox </> show rp)
+        pure (rp,checksum)
+    | (_,rp) <- Map.toList m1
+    ]
 
 insertIntoCache :: RelPath -> X Checksum
 insertIntoCache rp = do
@@ -472,15 +456,15 @@ type QChecksum = String
 toQ :: Witness -> QWitness
 toQ wit = do
   let Witness{key,val} = wit
-  let WitnessKey{command,deps} = key
+  let WitnessKey{command,wdeps} = key
   let WitnessValue{wtargets} = val
   let fromStore (StoreWit m) = [ (fp,sum) | (RelPath fp,Checksum sum) <- Map.toList m ]
-  WIT { command, deps = fromStore deps, targets = fromStore wtargets }
+  WIT { command, deps = fromStore wdeps, targets = fromStore wtargets }
 
 fromQ :: QWitness -> Witness
 fromQ WIT{command,deps,targets} = do
   let toStore xs = StoreWit (Map.fromList [ (RelPath fp,Checksum sum) | (fp,sum) <- xs ])
-  let key = WitnessKey{command,deps = toStore deps}
+  let key = WitnessKey{command,wdeps = toStore deps}
   let val = WitnessValue{wtargets = toStore targets}
   Witness{key,val}
 
