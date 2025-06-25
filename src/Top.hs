@@ -2,6 +2,7 @@
 module Top (main) where
 
 import Control.Monad (ap,liftM)
+import Control.Monad (when)
 import Data.Char qualified as Char
 import Data.List (intercalate)
 import Data.List.Split (splitOn)
@@ -15,7 +16,7 @@ import System.Process (callCommand,shell,readCreateProcess)
 import Text.Printf (printf)
 
 main :: IO ()
-main = jengaMain $ do
+main = engineMain $ do
   let dir = RelPath "example"
   let config = dir </> "config"
   configContents <- readSourceDefaulting "default.exe" config
@@ -145,70 +146,90 @@ data RelPath = RelPath String deriving (Eq,Ord)
 -- show
 
 instance Show Key where show (Key rp) = show rp
-
 instance Show Rule where show Rule{tag} = tag
-
 instance Show ErrMessage where show (ErrMessage s) = printf "Error: %s" s
-
 instance Show Checksum where show (Checksum sum) = sum
-
 instance Show RelPath where show (RelPath fp) = fp
 
 ----------------------------------------------------------------------
--- jenga main
+-- directories locations for cache, sandbox etc
 
-jengaMain :: G () -> IO ()
-jengaMain userDefs = do
+jengaDir,cacheDir,sandboxDir,materializeDir,witDir :: RelPath
+jengaDir = RelPath ",jenga"
+cacheDir = jengaDir </> "cache"
+sandboxDir = jengaDir </> "box"
+materializeDir = jengaDir </> "artifacts"
+witDir = jengaDir </> "witness"
+
+----------------------------------------------------------------------
+-- Engine main
+
+engineMain :: G () -> IO ()
+engineMain userDefs = do
   config <- parseCommandLine <$> getArgs
   generateAndBuild config userDefs
-
-----------------------------------------------------------------------
--- Config: control logging of stages: Generate/Build/Execite
-
-data Config = Config
-  { seeA :: Bool
-  , seeB :: Bool
-  , seeX :: Bool
-  }
-
-parseCommandLine :: [String] -> Config
-parseCommandLine = loop config0
-  where
-    config0 = Config { seeA = False, seeB = False, seeX = False }
-    loop :: Config -> [String] -> Config
-    loop config = \case
-      [] -> config
-      "-a":xs      -> loop config { seeA = True } xs
-      "-b":xs      -> loop config { seeB = True } xs
-      "-x":xs      -> loop config { seeX = True } xs
-      ('-':flag):_ -> error (show ("unknown flag",flag))
-      x:_          -> error (show ("unknown arg",x))
-
-----------------------------------------------------------------------
--- Generate
 
 generateAndBuild :: Config -> G () -> IO ()
 generateAndBuild config m = do
   runB config (runGenerate config m) >>= \case
     Left mes -> printf "go -> Error:\n%s\n" (show mes)
     Right system -> do
-      let System{roots} = system
+      let System{roots,rules} = system
+      printf "elaborated %s and %s\n"
+        (pluralize (length rules) "rule")
+        (pluralize (length roots) "root")
       runB config $ do
         sums <- doBuild config system roots
         sequence_ [ materialize sum key | (sum,key) <- zip sums roots ]
+
+pluralize :: Int -> String -> String
+pluralize n what = printf "%d %s%s" n what (if n == 1 then "" else "s")
+
+----------------------------------------------------------------------
+-- Command line: control logging
+
+data Config = Config
+  { seeE :: Bool -- log steps for elaboration of rules and roots
+  , seeB :: Bool -- log steps for bringing a build up to date
+  , seeA :: Bool -- log execution of user build commands
+  , seeX :: Bool -- log execution of other externally run commands
+  , seeI :: Bool -- log execution of internal file system access (i.e not shelling out)
+  }
+
+parseCommandLine :: [String] -> Config
+parseCommandLine = loop config0
+  where
+    config0 = Config False False False False False
+    loop :: Config -> [String] -> Config
+    loop config = \case
+      [] -> config
+      "-e":xs      -> loop config { seeE = True } xs
+      "-b":xs      -> loop config { seeB = True } xs
+      "-a":xs      -> loop config { seeA = True } xs
+      "-x":xs      -> loop config { seeX = True } xs
+      "-i":xs      -> loop config { seeI = True } xs
+      ('-':flag):_ -> error (show ("unknown flag",flag))
+      x:_          -> error (show ("unknown arg",x))
+
+----------------------------------------------------------------------
+-- Generate
 
 data System = System { roots :: [Key], sources :: [Key], rules :: [Rule] }
 
 type OrErr a = Either ErrMessage a
 data ErrMessage = ErrMessage String
 
-runGenerate :: Config -> G () -> B (OrErr System)
-runGenerate config m = loop m sys0 k0
+runGenerate :: Config -> G () -> B (OrErr System) -- TODO: rename elaborate?
+runGenerate config@Config{seeE} m = loop m sys0 k0
   where
     sys0 :: System
     sys0 = System { sources = [], rules = [], roots = [] }
     k0 :: System -> () -> B (OrErr System)
     k0 s () = pure (Right s)
+
+    logE :: String -> B ()
+    logE mes = when seeE $ BLog (printf "E: %s" mes)
+
     loop :: G a -> System -> (System -> a -> B (OrErr System)) -> B (OrErr System)
     loop m s k = case m of
       GRet a -> k s a
@@ -216,12 +237,15 @@ runGenerate config m = loop m sys0 k0
       GFail mes -> pure (Left (ErrMessage mes)) -- ignore k
       -- TODO: as we add rule/source, check no previous def
       GSource key -> do
+        logE $ printf "Elaborate source: %s" (show key)
         let System{sources} = s
         k s { sources = key : sources } ()
       GRule rule -> do
+        logE $ printf "Elaborate rule: %s" (show rule)
         let System{rules} = s
         k s { rules = rule : rules } ()
       GRoot key -> do
+        logE $ printf "Elaborate root: %s" (show key)
         let System{roots} = s
         k s { roots = key : roots } ()
       GGlob dir -> do
@@ -239,13 +263,6 @@ runGenerate config m = loop m sys0 k0
 
 ----------------------------------------------------------------------
 -- Build
-
-jengaDir,cacheDir,sandboxDir,materializeDir,witDir :: RelPath
-jengaDir = RelPath ",jenga"
-cacheDir = jengaDir </> "cache"
-sandboxDir = jengaDir </> "box"
-materializeDir = jengaDir </> "artifacts"
-witDir = jengaDir </> "witness"
 
 data RuleOrSource = R Rule Int | S RelPath
 
@@ -275,17 +292,18 @@ doBuild Config{seeB} System{sources,rules} roots = mapM demand roots
   where
 
     log :: String -> B ()
-    log mes = if not seeB then pure () else BLog (printf "B: %s" mes)
+    log mes = when seeB $ BLog (printf "B: %s" mes)
 
     xs1 = [ (key, S rp) | key@(Key rp) <- sources ]
     xs2 = [ (key, R rule i) | rule@Rule{targets} <- rules, (i,key) <- zip [0..] targets ]
-    -- TODO: check no duplicate ways to build a key
+
+    -- TODO: check no duplicate ways to build a key; better still caller will have checked
     how :: Map Key RuleOrSource
     how = Map.fromList (xs1 ++ xs2)
 
     demand :: Key -> B Checksum
     demand key = do
-      log $ printf "Demand: %s" (show key)
+      log $ printf "Require: %s" (show key)
       case Map.lookup key how of
         Nothing -> do
           -- TODO: this needs to be a softer error
@@ -293,7 +311,6 @@ doBuild Config{seeB} System{sources,rules} roots = mapM demand roots
         Just rs ->
           case rs of
             S rp -> do
-              log $ printf "Source: %s" (show key)
               checksum <- Execute (insertIntoCache rp)
               pure checksum
 
@@ -302,24 +319,18 @@ doBuild Config{seeB} System{sources,rules} roots = mapM demand roots
               let Rule{deps,action,targets} = rule
               let Action{inputs,command,outputs} = action
               depSums <- mapM demand deps
-              let witKey = WitnessKey
-                    { command = command
-                    , deps = makeStoreWit deps depSums inputs
-                    }
+              let witKey = WitnessKey { command, deps = makeStoreWit deps depSums inputs}
               wks <- hashWitnessKey witKey
-              --log $ printf "Compute WKS: %s" (show wks)
               verifyWitness wks >>= \case
                 Just wit -> do
                   let Witness{val} = wit
                   let WitnessValue{wtargets} = val
                   pure (checksumOfKey outputs wtargets key)
                 Nothing -> do
-                  log $ printf "Build: %s" (show rule)
+                  log $ printf "Execute: %s" (show rule)
                   targetSums <- buildWithRule depSums rule
-                  let val = WitnessValue
-                        { wtargets = makeStoreWit targets targetSums outputs }
+                  let val = WitnessValue { wtargets = makeStoreWit targets targetSums outputs }
                   let wit = Witness { key = witKey, val }
-                  --log $ printf "Witness: %s" (show rule)
                   saveWitness wks wit
                   let checksum = targetSums!!i
                   pure checksum
@@ -376,7 +387,7 @@ saveWitness wks wit = do
   let witFile = witDir </> show wks
   Execute $ do
     XMakeDir (dirRelPath witFile)
-    XWrite (importWitness wit ++ "\n") witFile
+    XWriteFile (importWitness wit ++ "\n") witFile
 
 buildWithRule :: [Checksum] -> Rule -> B [Checksum]
 buildWithRule depSums rule = do
@@ -494,7 +505,7 @@ runB config b = runX config $ do
   where
     k0 :: Int -> a -> X a
     k0 i a = do
-      XLog (printf "ran %d actions" i)
+      when (i>0) $ XLog (printf "ran %s" (pluralize i "action"))
       pure a
 
     loop :: B a -> Int -> (Int -> a -> X b) -> X b
@@ -516,74 +527,81 @@ data X a where
   XRet :: a -> X a
   XBind :: X a -> (a -> X b) -> X b
   XLog :: String -> X ()
-  XGlob :: RelPath -> X [RelPath]
-  XReadFile :: RelPath -> X String
   XRunCommandInDir :: RelPath -> String -> X ()
   XMd5sum :: RelPath -> X Checksum
   XHash :: String -> X Checksum
-  XWrite :: String -> RelPath -> X ()
   XCopy :: RelPath -> RelPath -> X ()
+  XMakeReadOnly :: RelPath -> X ()
+  XMakeDir :: RelPath -> X ()
+  XGlob :: RelPath -> X [RelPath]
+  XExists :: RelPath -> X Bool
+  XReadFile :: RelPath -> X String
+  XWriteFile :: String -> RelPath -> X ()
   XHardLink :: RelPath -> RelPath -> X ()
   XRemovelink :: RelPath -> X ()
-  XExists :: RelPath -> X Bool
-  XMakeDir :: RelPath -> X ()
-  XMakeReadOnly :: RelPath -> X ()
 
 runX :: Config -> X a -> IO a
-runX Config{seeA,seeX} = loop
+runX Config{seeA,seeX,seeI} = loop
   where
-    log,logA :: String -> IO ()
-    log mes = if not seeX then pure () else printf "X: %s\n" mes
-    logA mes = if (not seeX && not seeA) then pure () else printf "A: %s\n" mes
+    logA,logX,logI :: String -> IO ()
+    logA mes = when seeA $ printf "A: %s\n" mes
+    logX mes = when seeX $ printf "X: %s\n" mes
+    logI mes = when seeI $ printf "I: %s\n" mes
 
     loop :: X a -> IO a
     loop x = case x of
       XRet a -> pure a
       XBind m f -> do a <- loop m; loop (f a)
       XLog s -> do putStrLn s
-      XGlob (RelPath fp) -> do
-        log $ printf "ls %s" fp
-        xs <- listDirectory fp
-        pure [ RelPath fp </> x | x <- xs ]
-      XReadFile (RelPath p) -> do
-        log $ printf "read %s" p
-        readFile p
+
+      -- sandboxed execution of user command
       XRunCommandInDir (RelPath dir) command -> do
         logA $ printf "cd %s; %s" dir command
         withCurrentDirectory dir (callCommand command)
+
+      -- other commands with shell out to external process
+      -- TODO: prefer internal commands when possible; quicker?
       XMd5sum (RelPath fp) -> do
         let command = printf "md5sum %s" fp
-        log command
+        logX command
         output <- readCreateProcess (shell command) ""
         let sum = case (splitOn " " output) of [] -> undefined; x:_ -> x
         pure (Checksum sum)
       XHash contents -> do
         let command = printf "echo '%s' | md5sum" contents
-        --log command
+        logX command
         output <- readCreateProcess (shell command) ""
         let sum = case (splitOn " " output) of [] -> undefined; x:_ -> x
         pure (Checksum sum)
-      XWrite contents (RelPath dest) -> do
-        --log $ printf "echo '%s' > %s" contents dest
-        log $ printf "write %s" dest
-        writeFile dest contents
       XCopy (RelPath src) (RelPath dest) -> do
         let command = printf "cp %s %s" src dest
-        log command
+        logX command
         callCommand command
-      XHardLink (RelPath src) (RelPath dest) -> do
-        log $ printf "ln %s %s" src dest
-        createLink src dest
-      XRemovelink (RelPath rp) -> do
-        log $ printf "rm %s" rp
-        removeLink rp
-      XExists (RelPath fp) -> do
-        --log $ printf "?%s" fp
-        fileExist fp
-      XMakeDir (RelPath fp) -> do
-        --log $ printf "mkdir %s" fp
-        createDirectoryIfMissing True fp
       XMakeReadOnly (RelPath fp) -> do
         let command = printf "chmod a-w %s" fp
-        log command
+        logX command
         callCommand command
+
+      -- internal file system access (log equivalent external command)
+      XMakeDir (RelPath fp) -> do
+        logI $ printf "mkdir -p %s" fp
+        createDirectoryIfMissing True fp
+      XGlob (RelPath fp) -> do
+        logI $ printf "ls %s" fp
+        xs <- listDirectory fp
+        pure [ RelPath fp </> x | x <- xs ]
+      XExists (RelPath fp) -> do
+        logI $ printf "test -e %s" fp
+        fileExist fp
+      XReadFile (RelPath p) -> do
+        logI $ printf "cat %s" p
+        readFile p
+      XWriteFile contents (RelPath dest) -> do
+        logI $ printf "cat> %s" dest
+        writeFile dest contents
+      XHardLink (RelPath src) (RelPath dest) -> do
+        logI $ printf "ln %s %s" src dest
+        createLink src dest
+      XRemovelink (RelPath rp) -> do
+        logI $ printf "rm %s" rp
+        removeLink rp
