@@ -1,182 +1,18 @@
-
-module Top (main) where
+module Engine (engineMain) where
 
 import Control.Monad (ap,liftM)
 import Control.Monad (when)
-import Data.Char qualified as Char
 import Data.Hash.MD5 qualified as MD5
-import Data.List (intercalate)
 import Data.List.Split (splitOn)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirectory,removePathForcibly,copyFile)
 import System.Environment (getArgs)
-import System.FilePath qualified as FP
 import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode)
 import System.Process (callCommand,shell,readCreateProcess)
 import Text.Printf (printf)
 
-main :: IO ()
-main = engineMain $ do
-  let dir = Loc "example"
-  let config = dir </> "config"
-  configContents <- readSourceDefaulting "default.exe" config
-  main <- Key <$> parseSingleName config configContents
-  GRoot main
-  xs <- listBaseNamesWithSuffix dir ".c"
-  mapM_ (GSource . cKey) xs
-  mapM_ setupCrule xs
-  setupLinkRule main xs
-  pure ()
-
-parseSingleName :: Loc -> String -> G Loc
-parseSingleName loc str =
-  case lines str of
-    [] -> GFail $ printf "parseSingleName(%s): no lines" (show loc)
-    _:_:_ -> GFail $ printf "parseSingleName(%s): unexpected multiple lines" (show loc)
-    [line] ->
-      if any badChar line
-      then GFail (printf "parseSingleName(%s): Bad name: '%s'" (show loc) line)
-      else do
-        let dir = dirLoc loc
-        pure (dir </> line)
-      where
-        badChar c = c == '/' || n < 33 || n > 126
-          where n = Char.ord c
-
-----------------------------------------------------------------------
--- rule stdlib common code -- build/link C
-
-setupLinkRule :: Key -> [String] -> G ()
-setupLinkRule exe xs =
-  if length xs == 0 then GFail (printf "setupLinkRule(%s):no objects" (show exe)) else do
-  let obs = [ oKey x | x <- xs ]
-  GRule $ Rule
-    { tag = printf "LINK-%s" (show exe)
-    , targets = locateKeys [exe]
-    , depcom = do
-        mapM_ need obs
-        pure $ printf "gcc %s -o %s" (baseKeys obs) (baseKey exe)
-    }
-
-setupCrule :: String -> G ()
-setupCrule x = do
-  let c = cKey x
-  let o = oKey x
-  GRule $ Rule
-    { tag = printf "CC-%s" x
-    , targets = locateKeys [o]
-    , depcom = do
-        need c
-        pure $ printf "gcc -c %s -o %s" (baseKey c) (baseKey o)
-    }
-
-locateKeys :: [Key] -> KeyMap
-locateKeys ks = KeyMap (Map.fromList [ (k, baseLoc loc) | k@(Key loc) <- ks ])
-
-cKey :: String -> Key
-cKey x = Key (Loc (x++".c"))
-
-oKey :: String -> Key
-oKey x = Key (Loc (x++".o"))
-
-need :: Key -> D ()
-need key@(Key loc) = DNeed key (baseLoc loc)
-
-----------------------------------------------------------------------
--- rule stdlib util code
-
-readSourceDefaulting :: String -> Loc -> G String
-readSourceDefaulting def path = do
-  GExists path >>= \case
-    False -> pure def
-    True -> do
-      let key = Key path
-      GSource key
-      GReadKey key
-
-listBaseNamesWithSuffix :: Loc -> String -> G [String]
-listBaseNamesWithSuffix dir sought = do
-  locs <- GGlob dir
-  pure [ base
-       | Loc x <- locs
-       , FP.hasExtension x
-       , (base,suf) <- [FP.splitExtensions x]
-       , suf == sought
-       ]
-
-baseKeys :: [Key] -> String
-baseKeys = intercalate " " . map baseKey
-
-baseKey :: Key -> String
-baseKey (Key (Loc fp)) = FP.takeFileName fp
-
-----------------------------------------------------------------------
--- build tool interface
-
--- G: (rule) generation monad
-
-instance Functor G where fmap = liftM
-instance Applicative G where pure = GRet; (<*>) = ap
-instance Monad G where (>>=) = GBind
-
-data G a where
-  GRet :: a -> G a
-  GBind :: G a -> (a -> G b) -> G b
-  GFail :: String -> G a
-  GRoot :: Key -> G ()
-  GSource :: Key -> G ()
-  GRule :: Rule -> G ()
-  GGlob :: Loc -> G [Loc]
-  GExists :: Loc -> G Bool
-  GReadKey :: Key -> G String
-
-data Rule = Rule
-  { tag :: String
-  , targets :: KeyMap
-  , depcom :: D String -- TODO: better type than String?
-  }
-
-data Key = Key Loc deriving (Eq,Ord)
-
-data KeyMap = KeyMap (Map Key Loc)
-
-data Loc = Loc FilePath deriving (Eq,Ord) -- A relative file-path location
-
-----------------------------------------------------------------------
--- D: dependency monad
-
-instance Functor D where fmap = liftM
-instance Applicative D where pure = DRet; (<*>) = ap
-instance Monad D where (>>=) = DBind
-
-data D a where
-  DRet :: a -> D a
-  DBind :: D a -> (a -> D b) -> D b
-  DNeed :: Key -> Loc -> D ()
-  --DReadKey :: Key -> D String
-
-----------------------------------------------------------------------
--- show
-
-instance Show Key where show (Key loc) = show loc
-instance Show Rule where show Rule{tag} = tag
-instance Show ErrMessage where show (ErrMessage s) = printf "Error: %s" s
-instance Show Checksum where show (Checksum sum) = sum
-instance Show Loc where show (Loc fp) = fp
-
-----------------------------------------------------------------------
--- directories locations for cache, sandbox etc
-
-jengaCache,cachedFilesDir,tracesDir :: Loc
-jengaCache = Loc ".cache" -- TODO would be better shared at: ~/.cache/jenga/
-cachedFilesDir = jengaCache </> "files"
-tracesDir = jengaCache </> "traces"
-
-jengaDir,sandboxDir,artifactsDir :: Loc
-jengaDir = Loc ",jenga"
-sandboxDir = jengaDir </> "box"
-artifactsDir = jengaDir </> "artifacts"
+import Interface(G(..),D(..),Rule(..),KeyMap(..),Key(..),Loc(..),(</>),dirLoc)
 
 ----------------------------------------------------------------------
 -- Engine main
@@ -204,7 +40,20 @@ pluralize :: Int -> String -> String
 pluralize n what = printf "%d %s%s" n what (if n == 1 then "" else "s")
 
 ----------------------------------------------------------------------
--- Command line: control logging
+-- locations for cache, sandbox etc
+
+jengaCache,cachedFilesDir,tracesDir :: Loc
+jengaCache = Loc ".cache" -- TODO would be better shared at: ~/.cache/jenga/
+cachedFilesDir = jengaCache </> "files"
+tracesDir = jengaCache </> "traces"
+
+jengaDir,sandboxDir,artifactsDir :: Loc
+jengaDir = Loc ",jenga"
+sandboxDir = jengaDir </> "box"
+artifactsDir = jengaDir </> "artifacts"
+
+----------------------------------------------------------------------
+-- Command line: used to control logging
 
 data Config = Config
   { seeE :: Bool -- log steps for elaboration of rules and roots
@@ -234,6 +83,8 @@ parseCommandLine = loop config0
 
 type OrErr a = Either ErrMessage a
 data ErrMessage = ErrMessage String
+
+instance Show ErrMessage where show (ErrMessage s) = printf "Error: %s" s
 
 runElaboration :: Config -> G () -> B (OrErr System)
 runElaboration config@Config{seeE} m = loop m sys0 k0
@@ -291,8 +142,6 @@ howToBuild System{sources,rules} = do
           | rule@Rule{targets=KeyMap keyMap} <- rules, (key,loc) <- Map.toList keyMap
           ]
   Map.fromList (xs1 ++ xs2)
-
-----------------------------------------------------------------------
 
 ----------------------------------------------------------------------
 -- Build
@@ -361,6 +210,49 @@ gatherDeps d = loop d [] k0
       DBind m f -> loop m xs $ \xs a -> loop (f a) xs k
       DNeed key loc -> k ((key,loc):xs) ()
 
+buildWithRule :: String -> WitMap -> Rule -> B WitMap
+buildWithRule command depWit rule = do
+  sandbox <- NewSandbox
+  let Rule{targets} = rule
+  Execute (XMakeDir sandbox)
+  Execute (setupInputs sandbox depWit)
+  Execute (XRunCommandInDir sandbox command)
+  targetWit <- Execute (cacheOutputs sandbox targets)
+  Execute (XRemoveDirRecursive sandbox)
+  pure targetWit
+
+setupInputs :: Loc -> WitMap -> X ()
+setupInputs sandbox (WitMap m1) = do
+  sequence_
+    [ XHardLink (cacheFile checksum) (sandbox </> show loc)
+    | (loc,checksum) <- Map.toList m1
+    ]
+
+cacheOutputs :: Loc -> KeyMap -> X WitMap
+cacheOutputs sandbox (KeyMap m1) = do
+  WitMap . Map.fromList <$> sequence
+    [ do
+        checksum <- insertIntoCache (sandbox </> show loc)
+        pure (loc,checksum)
+    | (_,loc) <- Map.toList m1
+    ]
+
+insertIntoCache :: Loc -> X Checksum
+insertIntoCache loc = do
+  checksum <- XMd5sum loc
+  let file = cacheFile checksum
+  XExists file >>= \case
+    True -> pure ()
+    False -> do
+      XCopyFile loc file
+      XMakeReadOnly file
+  pure checksum
+
+cacheFile :: Checksum -> Loc
+cacheFile (Checksum sum) = cachedFilesDir </> sum
+
+----------------------------------------------------------------------
+-- Build witnesses (AKA constructive traces)
 
 data Witness = Witness { key :: WitnessKey, val :: WitnessValue }
 
@@ -375,6 +267,7 @@ data WitKeySum = WitKeySum Checksum
 data Checksum = Checksum String
 
 instance Show WitKeySum where show (WitKeySum (Checksum sum)) = sum
+instance Show Checksum where show (Checksum sum) = sum
 
 lookWitMap :: Loc -> WitMap -> Checksum
 lookWitMap loc (WitMap m) = maybe err id $ Map.lookup loc m
@@ -418,56 +311,6 @@ saveWitness wks wit = do
   Execute $ do
     XMakeDir (dirLoc witFile)
     XWriteFile (importWitness wit ++ "\n") witFile
-
-buildWithRule :: String -> WitMap -> Rule -> B WitMap
-buildWithRule command depWit rule = do
-  sandbox <- NewSandbox
-  let Rule{targets} = rule
-  Execute (XMakeDir sandbox)
-  Execute (setupInputs sandbox depWit)
-  Execute (XRunCommandInDir sandbox command)
-  targetWit <- Execute (cacheOutputs sandbox targets)
-  Execute (XRemoveDirRecursive sandbox)
-  pure targetWit
-
-setupInputs :: Loc -> WitMap -> X ()
-setupInputs sandbox (WitMap m1) = do
-  sequence_
-    [ XHardLink (cacheFile checksum) (sandbox </> show loc)
-    | (loc,checksum) <- Map.toList m1
-    ]
-
-cacheOutputs :: Loc -> KeyMap -> X WitMap
-cacheOutputs sandbox (KeyMap m1) = do
-  WitMap . Map.fromList <$> sequence
-    [ do
-        checksum <- insertIntoCache (sandbox </> show loc)
-        pure (loc,checksum)
-    | (_,loc) <- Map.toList m1
-    ]
-
-insertIntoCache :: Loc -> X Checksum
-insertIntoCache loc = do
-  checksum <- XMd5sum loc
-  let file = cacheFile checksum
-  XExists file >>= \case
-    True -> pure ()
-    False -> do
-      XCopyFile loc file
-      XMakeReadOnly file
-  pure checksum
-
-cacheFile :: Checksum -> Loc
-cacheFile (Checksum sum) = cachedFilesDir </> sum
-
-(</>) :: Loc -> String -> Loc
-(</>) (Loc dir) filename = Loc (dir FP.</> filename)
-
-dirLoc :: Loc -> Loc
-dirLoc (Loc fp) = Loc (FP.takeDirectory fp)
-
-baseLoc :: Loc -> Loc
-baseLoc (Loc fp) = Loc (FP.takeFileName fp)
 
 ----------------------------------------------------------------------
 -- export/import Witness data in fixed format using flatter type
