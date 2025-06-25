@@ -9,10 +9,10 @@ import Data.List (intercalate)
 import Data.List.Split (splitOn)
 import Data.Map (Map)
 import Data.Map qualified as Map
-import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirectory,removePathForcibly)
+import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirectory,removePathForcibly,copyFile)
 import System.Environment (getArgs)
 import System.FilePath qualified as FP
-import System.Posix.Files (fileExist,createLink,removeLink)
+import System.Posix.Files (fileExist,createLink,removeLink,getFileStatus,fileMode,intersectFileModes,setFileMode)
 import System.Process (callCommand,shell,readCreateProcess)
 import Text.Printf (printf)
 
@@ -434,7 +434,7 @@ insertIntoCache rp = do
   XExists file >>= \case
     True -> pure ()
     False -> do
-      XCopy rp file
+      XCopyFile rp file
       XMakeReadOnly file
   pure checksum
 
@@ -500,13 +500,10 @@ data B a where
 
 runB :: Config -> B a -> IO a
 runB config b = runX config $ do
-  XMakeDir jengaCache
   XMakeDir cachedFilesDir
   XMakeDir tracesDir
-  XMakeDir jengaDir
-  XRemoveDirRecursive sandboxDir
+  XRemoveDirRecursive jengaDir
   XMakeDir sandboxDir
-  XRemoveDirRecursive artifactsDir
   XMakeDir artifactsDir
   loop b 0 k0
   where
@@ -537,13 +534,13 @@ data X a where
 
   XRunCommandInDir :: RelPath -> String -> X ()
   XMd5sum :: RelPath -> X Checksum
-  XCopy :: RelPath -> RelPath -> X ()
-  XMakeReadOnly :: RelPath -> X ()
 
   XHash :: String -> X Checksum
   XMakeDir :: RelPath -> X ()
   XGlob :: RelPath -> X [RelPath]
   XExists :: RelPath -> X Bool
+  XCopyFile :: RelPath -> RelPath -> X ()
+  XMakeReadOnly :: RelPath -> X ()
   XReadFile :: RelPath -> X String
   XWriteFile :: String -> RelPath -> X ()
   XHardLink :: RelPath -> RelPath -> X ()
@@ -570,21 +567,12 @@ runX Config{seeA,seeX,seeI} = loop
         withCurrentDirectory dir (callCommand command)
 
       -- other commands with shell out to external process
-      -- TODO: prefer internal commands when possible; quicker?
       XMd5sum (RelPath fp) -> do
         let command = printf "md5sum %s" fp
         logX command
         output <- readCreateProcess (shell command) ""
         let sum = case (splitOn " " output) of [] -> undefined; x:_ -> x
         pure (Checksum sum)
-      XCopy (RelPath src) (RelPath dest) -> do
-        let command = printf "cp %s %s" src dest
-        logX command
-        callCommand command
-      XMakeReadOnly (RelPath fp) -> do
-        let command = printf "chmod a-w %s" fp
-        logX command
-        callCommand command
 
       -- internal file system access (log equivalent external command)
       XHash contents -> do
@@ -601,6 +589,14 @@ runX Config{seeA,seeX,seeI} = loop
       XExists (RelPath fp) -> do
         logI $ printf "test -e %s" fp
         fileExist fp
+      XCopyFile (RelPath src) (RelPath dest) -> do
+        logI $ printf "cp %s %s" src dest
+        copyFile src dest
+      XMakeReadOnly (RelPath fp) -> do
+        logI $ printf "chmod a-w %s" fp
+        old_mode <- fileMode <$> getFileStatus fp
+        let new_mode = intersectFileModes 0o555 old_mode
+        setFileMode fp new_mode
       XReadFile (RelPath p) -> do
         logI $ printf "cat %s" p
         readFile p
