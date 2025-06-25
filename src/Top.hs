@@ -18,7 +18,7 @@ import Text.Printf (printf)
 
 main :: IO ()
 main = engineMain $ do
-  let dir = RelPath "example"
+  let dir = Loc "example"
   let config = dir </> "config"
   configContents <- readSourceDefaulting "default.exe" config
   main <- Key <$> parseSingleName config configContents
@@ -29,16 +29,16 @@ main = engineMain $ do
   setupLinkRule main xs
   pure ()
 
-parseSingleName :: RelPath -> String -> G RelPath
-parseSingleName rp str =
+parseSingleName :: Loc -> String -> G Loc
+parseSingleName loc str =
   case lines str of
-    [] -> GFail $ printf "parseSingleName(%s): no lines" (show rp)
-    _:_:_ -> GFail $ printf "parseSingleName(%s): unexpected multiple lines" (show rp)
+    [] -> GFail $ printf "parseSingleName(%s): no lines" (show loc)
+    _:_:_ -> GFail $ printf "parseSingleName(%s): unexpected multiple lines" (show loc)
     [line] ->
       if any badChar line
-      then GFail (printf "parseSingleName(%s): Bad name: '%s'" (show rp) line)
+      then GFail (printf "parseSingleName(%s): Bad name: '%s'" (show loc) line)
       else do
-        let dir = dirRelPath rp
+        let dir = dirLoc loc
         pure (dir </> line)
       where
         badChar c = c == '/' || n < 33 || n > 126
@@ -70,18 +70,18 @@ setupCrule x = do
     }
 
 locateKeys :: [Key] -> KeyMap
-locateKeys ks = KeyMap (Map.fromList [ (k, baseRelPath rp) | k@(Key rp) <- ks ])
+locateKeys ks = KeyMap (Map.fromList [ (k, baseLoc loc) | k@(Key loc) <- ks ])
 
 cKey :: String -> Key
-cKey x = Key (RelPath (x++".c"))
+cKey x = Key (Loc (x++".c"))
 
 oKey :: String -> Key
-oKey x = Key (RelPath (x++".o"))
+oKey x = Key (Loc (x++".o"))
 
 ----------------------------------------------------------------------
 -- rule stdlib util code
 
-readSourceDefaulting :: String -> RelPath -> G String
+readSourceDefaulting :: String -> Loc -> G String
 readSourceDefaulting def path = do
   GExists path >>= \case
     False -> pure def
@@ -90,11 +90,11 @@ readSourceDefaulting def path = do
       GSource key
       GReadKey key
 
-listBaseNamesWithSuffix :: RelPath -> String -> G [String]
+listBaseNamesWithSuffix :: Loc -> String -> G [String]
 listBaseNamesWithSuffix dir sought = do
-  rps <- GGlob dir
+  locs <- GGlob dir
   pure [ base
-       | RelPath x <- rps
+       | Loc x <- locs
        , FP.hasExtension x
        , (base,suf) <- [FP.splitExtensions x]
        , suf == sought
@@ -104,10 +104,12 @@ baseKeys :: [Key] -> String
 baseKeys = intercalate " " . map baseKey
 
 baseKey :: Key -> String
-baseKey (Key (RelPath fp)) = FP.takeFileName fp
+baseKey (Key (Loc fp)) = FP.takeFileName fp
 
 ----------------------------------------------------------------------
 -- build tool interface
+
+-- G: (rule) generation monad
 
 instance Functor G where fmap = liftM
 instance Applicative G where pure = GRet; (<*>) = ap
@@ -120,8 +122,8 @@ data G a where
   GRoot :: Key -> G ()
   GSource :: Key -> G ()
   GRule :: Rule -> G ()
-  GGlob :: RelPath -> G [RelPath]
-  GExists :: RelPath -> G Bool
+  GGlob :: Loc -> G [Loc]
+  GExists :: Loc -> G Bool
   GReadKey :: Key -> G String
 
 data Rule = Rule
@@ -131,31 +133,31 @@ data Rule = Rule
   , command :: String
   }
 
-data Key = Key RelPath deriving (Eq,Ord)
+data Key = Key Loc deriving (Eq,Ord)
 
-data KeyMap = KeyMap (Map Key RelPath)
+data KeyMap = KeyMap (Map Key Loc)
 
-data RelPath = RelPath String deriving (Eq,Ord) -- TODO: renamae Location -- doc is relative
+data Loc = Loc FilePath deriving (Eq,Ord) -- A relative file-path location
 
 ----------------------------------------------------------------------
 -- show
 
-instance Show Key where show (Key rp) = show rp
+instance Show Key where show (Key loc) = show loc
 instance Show Rule where show Rule{tag} = tag
 instance Show ErrMessage where show (ErrMessage s) = printf "Error: %s" s
 instance Show Checksum where show (Checksum sum) = sum
-instance Show RelPath where show (RelPath fp) = fp
+instance Show Loc where show (Loc fp) = fp
 
 ----------------------------------------------------------------------
 -- directories locations for cache, sandbox etc
 
-jengaCache,cachedFilesDir,tracesDir :: RelPath
-jengaCache = RelPath ".cache" -- TODO would be better shared at: ~/.cache/jenga/
+jengaCache,cachedFilesDir,tracesDir :: Loc
+jengaCache = Loc ".cache" -- TODO would be better shared at: ~/.cache/jenga/
 cachedFilesDir = jengaCache </> "files"
 tracesDir = jengaCache </> "traces"
 
-jengaDir,sandboxDir,artifactsDir :: RelPath
-jengaDir = RelPath ",jenga"
+jengaDir,sandboxDir,artifactsDir :: Loc
+jengaDir = Loc ",jenga"
 sandboxDir = jengaDir </> "box"
 artifactsDir = jengaDir </> "artifacts"
 
@@ -165,11 +167,11 @@ artifactsDir = jengaDir </> "artifacts"
 engineMain :: G () -> IO ()
 engineMain userDefs = do
   config <- parseCommandLine <$> getArgs
-  generateAndBuild config userDefs
+  elaborateAndBuild config userDefs
 
-generateAndBuild :: Config -> G () -> IO ()
-generateAndBuild config m = do
-  runB config (runGenerate config m) >>= \case
+elaborateAndBuild :: Config -> G () -> IO ()
+elaborateAndBuild config m = do
+  runB config (runElaboration config m) >>= \case
     Left mes -> printf "go -> Error:\n%s\n" (show mes)
     Right system -> do
       let System{roots,rules} = system
@@ -210,15 +212,15 @@ parseCommandLine = loop config0
       x:_          -> error (show ("unknown arg",x))
 
 ----------------------------------------------------------------------
--- Generate
+-- Elaborate
 
 data System = System { roots :: [Key], sources :: [Key], rules :: [Rule] }
 
 type OrErr a = Either ErrMessage a
 data ErrMessage = ErrMessage String
 
-runGenerate :: Config -> G () -> B (OrErr System) -- TODO: rename elaborate?
-runGenerate config@Config{seeE} m = loop m sys0 k0
+runElaboration :: Config -> G () -> B (OrErr System)
+runElaboration config@Config{seeE} m = loop m sys0 k0
   where
     sys0 :: System
     sys0 = System { sources = [], rules = [], roots = [] }
@@ -247,39 +249,39 @@ runGenerate config@Config{seeE} m = loop m sys0 k0
         let System{roots} = s
         k s { roots = key : roots } ()
       GGlob dir -> do
-        rps <- Execute (XGlob dir)
-        k s rps
-      GExists rp -> do
-        bool <- Execute (XExists rp)
+        locs <- Execute (XGlob dir)
+        k s locs
+      GExists loc -> do
+        bool <- Execute (XExists loc)
         k s bool
       GReadKey key -> do
         let system = s
-        _ <- doBuild config system [key]
-        let Key rp = key
-        contents <- Execute (XReadFile rp)
+        _ <- doBuild config system [key] -- build before elaboration is finished
+        let Key loc = key
+        contents <- Execute (XReadFile loc)
         k s contents
 
 ----------------------------------------------------------------------
 -- Build
 
-data RuleOrSource = R Rule RelPath | S RelPath -- TODO: better name?
+data RuleOrSource = ByRule Rule Loc | BySource Loc
 
 data Witness = Witness { key :: WitnessKey, val :: WitnessValue }
 
-data WitnessKey = WitnessKey { command :: String, wdeps :: StoreWit } deriving Show
+data WitnessKey = WitnessKey { command :: String, wdeps :: WitMap } deriving Show
 
-data WitnessValue = WitnessValue { wtargets :: StoreWit }
+data WitnessValue = WitnessValue { wtargets :: WitMap }
 
-data StoreWit = StoreWit (Map RelPath Checksum) deriving Show -- TODO: better name WitMap
+data WitMap = WitMap (Map Loc Checksum) deriving Show
 
 data Checksum = Checksum String
 
 materialize :: Checksum -> Key -> B ()
-materialize (Checksum sum) (Key rp) = do
+materialize (Checksum sum) (Key loc) = do
   let cacheFile = cachedFilesDir </> sum
-  let materializedFile = artifactsDir </> show rp
+  let materializedFile = artifactsDir </> show loc
   Execute $ do
-    XMakeDir (dirRelPath materializedFile)
+    XMakeDir (dirLoc materializedFile)
     XExists materializedFile >>= \case
       False -> pure ()
       True -> XRemovelink materializedFile
@@ -292,8 +294,10 @@ doBuild Config{seeB} System{sources,rules} roots = mapM demand roots
     log :: String -> B ()
     log mes = when seeB $ BLog (printf "B: %s" mes)
 
-    xs1 = [ (key, S rp) | key@(Key rp) <- sources ]
-    xs2 = [ (key, R rule rp) | rule@Rule{targets=KeyMap m} <- rules, (key,rp) <- Map.toList m ]
+    xs1 = [ (key, BySource loc) | key@(Key loc) <- sources ]
+    xs2 = [ (key, ByRule rule loc)
+          | rule@Rule{targets=KeyMap keyMap} <- rules, (key,loc) <- Map.toList keyMap
+          ]
 
     -- TODO: check no duplicate ways to build a key; better still caller will have checked
     how :: Map Key RuleOrSource
@@ -308,25 +312,25 @@ doBuild Config{seeB} System{sources,rules} roots = mapM demand roots
           error (printf "dont know how to build key: %s" (show key))
         Just rs ->
           case rs of
-            S rp -> do
-              checksum <- Execute (insertIntoCache rp)
+            BySource loc -> do
+              checksum <- Execute (insertIntoCache loc)
               pure checksum
 
             -- TODO: document this flow...
-            R rule rpTarget -> do
+            ByRule rule locTarget -> do
               log $ printf "Consult: %s" (show rule)
               let Rule{command,targets,deps=KeyMap deps} = rule
 
-              wdeps <- (StoreWit . Map.fromList) <$>
-                sequence [ do checksum <- demand key; pure (rp,checksum)
-                         | (key,rp) <- Map.toList deps
+              wdeps <- (WitMap . Map.fromList) <$>
+                sequence [ do checksum <- demand key; pure (loc,checksum)
+                         | (key,loc) <- Map.toList deps
                          ]
 
               let witKey = WitnessKey { command, wdeps }
               wks <- hashWitnessKey witKey
               verifyWitness wks >>= \case
                 Just Witness{val=WitnessValue{wtargets}} -> do
-                  pure (lookStoreWit (lookKeyMap key targets) wtargets)
+                  pure (lookWitMap (lookKeyMap key targets) wtargets)
 
                 Nothing -> do
                   log $ printf "Execute: %s" (show rule)
@@ -334,14 +338,14 @@ doBuild Config{seeB} System{sources,rules} roots = mapM demand roots
                   let val = WitnessValue { wtargets }
                   let wit = Witness { key = witKey, val }
                   saveWitness wks wit
-                  let checksum = lookStoreWit rpTarget wtargets
+                  let checksum = lookWitMap locTarget wtargets
                   pure checksum
 
-lookStoreWit :: RelPath -> StoreWit -> Checksum
-lookStoreWit rp (StoreWit m) = maybe err id $ Map.lookup rp m
-  where err = error "lookStoreWit"
+lookWitMap :: Loc -> WitMap -> Checksum
+lookWitMap loc (WitMap m) = maybe err id $ Map.lookup loc m
+  where err = error "lookWitMap"
 
-lookKeyMap :: Key -> KeyMap -> RelPath
+lookKeyMap :: Key -> KeyMap -> Loc
 lookKeyMap key (KeyMap m) = maybe err id $ Map.lookup key m
   where err = error "lookKeyMap"
 
@@ -360,7 +364,7 @@ verifyWitness wks = do
     Nothing -> pure Nothing
     Just wit -> do
       let Witness{val} = wit
-      let WitnessValue{wtargets=StoreWit m} = val
+      let WitnessValue{wtargets=WitMap m} = val
       ok <- all id <$> sequence [ existsCacheFile sum | (_,sum) <- Map.toList m ]
       if not ok then pure Nothing else do
         pure (Just wit)
@@ -381,10 +385,10 @@ saveWitness :: WitKeySum -> Witness -> B ()
 saveWitness wks wit = do
   let witFile = tracesDir </> show wks
   Execute $ do
-    XMakeDir (dirRelPath witFile)
+    XMakeDir (dirLoc witFile)
     XWriteFile (importWitness wit ++ "\n") witFile
 
-buildWithRule :: StoreWit -> Rule -> B StoreWit
+buildWithRule :: WitMap -> Rule -> B WitMap
 buildWithRule depWit rule = do
   sandbox <- NewSandbox
   let Rule{command,targets} = rule
@@ -395,44 +399,44 @@ buildWithRule depWit rule = do
   Execute (XRemoveDirRecursive sandbox)
   pure targetWit
 
-setupInputs :: RelPath -> StoreWit -> X ()
-setupInputs sandbox (StoreWit m1) = do
+setupInputs :: Loc -> WitMap -> X ()
+setupInputs sandbox (WitMap m1) = do
   sequence_
-    [ XHardLink (cacheFile checksum) (sandbox </> show rp)
-    | (rp,checksum) <- Map.toList m1
+    [ XHardLink (cacheFile checksum) (sandbox </> show loc)
+    | (loc,checksum) <- Map.toList m1
     ]
 
-cacheOutputs :: RelPath -> KeyMap -> X StoreWit
+cacheOutputs :: Loc -> KeyMap -> X WitMap
 cacheOutputs sandbox (KeyMap m1) = do
-  StoreWit . Map.fromList <$> sequence
+  WitMap . Map.fromList <$> sequence
     [ do
-        checksum <- insertIntoCache (sandbox </> show rp)
-        pure (rp,checksum)
-    | (_,rp) <- Map.toList m1
+        checksum <- insertIntoCache (sandbox </> show loc)
+        pure (loc,checksum)
+    | (_,loc) <- Map.toList m1
     ]
 
-insertIntoCache :: RelPath -> X Checksum
-insertIntoCache rp = do
-  checksum <- XMd5sum rp
+insertIntoCache :: Loc -> X Checksum
+insertIntoCache loc = do
+  checksum <- XMd5sum loc
   let file = cacheFile checksum
   XExists file >>= \case
     True -> pure ()
     False -> do
-      XCopyFile rp file
+      XCopyFile loc file
       XMakeReadOnly file
   pure checksum
 
-cacheFile :: Checksum -> RelPath
+cacheFile :: Checksum -> Loc
 cacheFile (Checksum sum) = cachedFilesDir </> sum
 
-(</>) :: RelPath -> String -> RelPath
-(</>) (RelPath dir) filename = RelPath (dir FP.</> filename)
+(</>) :: Loc -> String -> Loc
+(</>) (Loc dir) filename = Loc (dir FP.</> filename)
 
-dirRelPath :: RelPath -> RelPath
-dirRelPath (RelPath s) = RelPath (FP.takeDirectory s)
+dirLoc :: Loc -> Loc
+dirLoc (Loc fp) = Loc (FP.takeDirectory fp)
 
-baseRelPath :: RelPath -> RelPath
-baseRelPath (RelPath s) = RelPath (FP.takeFileName s)
+baseLoc :: Loc -> Loc
+baseLoc (Loc fp) = Loc (FP.takeFileName fp)
 
 ----------------------------------------------------------------------
 -- export/import Witness data in fixed format using flatter type
@@ -445,12 +449,12 @@ importWitness = show . toQ
 
 data QWitness = WIT
   { command :: String
-  , deps :: QStoreWit
-  , targets :: QStoreWit
+  , deps :: QWitMap
+  , targets :: QWitMap
   }
   deriving (Show,Read)
 
-type QStoreWit = [(FilePath,QChecksum)]
+type QWitMap = [(FilePath,QChecksum)]
 type QChecksum = String
 
 toQ :: Witness -> QWitness
@@ -458,12 +462,12 @@ toQ wit = do
   let Witness{key,val} = wit
   let WitnessKey{command,wdeps} = key
   let WitnessValue{wtargets} = val
-  let fromStore (StoreWit m) = [ (fp,sum) | (RelPath fp,Checksum sum) <- Map.toList m ]
+  let fromStore (WitMap m) = [ (fp,sum) | (Loc fp,Checksum sum) <- Map.toList m ]
   WIT { command, deps = fromStore wdeps, targets = fromStore wtargets }
 
 fromQ :: QWitness -> Witness
 fromQ WIT{command,deps,targets} = do
-  let toStore xs = StoreWit (Map.fromList [ (RelPath fp,Checksum sum) | (fp,sum) <- xs ])
+  let toStore xs = WitMap (Map.fromList [ (Loc fp,Checksum sum) | (fp,sum) <- xs ])
   let key = WitnessKey{command,wdeps = toStore deps}
   let val = WitnessValue{wtargets = toStore targets}
   Witness{key,val}
@@ -479,7 +483,7 @@ data B a where
   BRet :: a -> B a
   BBind :: B a -> (a -> B b) -> B b
   BLog :: String -> B ()
-  NewSandbox :: B RelPath
+  NewSandbox :: B Loc
   Execute :: X a -> B a
 
 runB :: Config -> B a -> IO a
@@ -516,20 +520,20 @@ data X a where
   XBind :: X a -> (a -> X b) -> X b
   XLog :: String -> X ()
 
-  XRunCommandInDir :: RelPath -> String -> X ()
-  XMd5sum :: RelPath -> X Checksum
+  XRunCommandInDir :: Loc -> String -> X ()
+  XMd5sum :: Loc -> X Checksum
 
   XHash :: String -> X Checksum
-  XMakeDir :: RelPath -> X ()
-  XGlob :: RelPath -> X [RelPath]
-  XExists :: RelPath -> X Bool
-  XCopyFile :: RelPath -> RelPath -> X ()
-  XMakeReadOnly :: RelPath -> X ()
-  XReadFile :: RelPath -> X String
-  XWriteFile :: String -> RelPath -> X ()
-  XHardLink :: RelPath -> RelPath -> X ()
-  XRemovelink :: RelPath -> X ()
-  XRemoveDirRecursive :: RelPath -> X ()
+  XMakeDir :: Loc -> X ()
+  XGlob :: Loc -> X [Loc]
+  XExists :: Loc -> X Bool
+  XCopyFile :: Loc -> Loc -> X ()
+  XMakeReadOnly :: Loc -> X ()
+  XReadFile :: Loc -> X String
+  XWriteFile :: String -> Loc -> X ()
+  XHardLink :: Loc -> Loc -> X ()
+  XRemovelink :: Loc -> X ()
+  XRemoveDirRecursive :: Loc -> X ()
 
 runX :: Config -> X a -> IO a
 runX Config{seeA,seeX,seeI} = loop
@@ -546,12 +550,12 @@ runX Config{seeA,seeX,seeI} = loop
       XLog s -> do putStrLn s
 
       -- sandboxed execution of user command
-      XRunCommandInDir (RelPath dir) command -> do
+      XRunCommandInDir (Loc dir) command -> do
         logA $ printf "cd %s; %s" dir command
         withCurrentDirectory dir (callCommand command)
 
       -- other commands with shell out to external process
-      XMd5sum (RelPath fp) -> do
+      XMd5sum (Loc fp) -> do
         let command = printf "md5sum %s" fp
         logX command
         output <- readCreateProcess (shell command) ""
@@ -563,36 +567,36 @@ runX Config{seeA,seeX,seeI} = loop
         logI $ printf "md5sum"
         let sum = MD5.md5s (MD5.Str contents)
         pure (Checksum sum)
-      XMakeDir (RelPath fp) -> do
+      XMakeDir (Loc fp) -> do
         logI $ printf "mkdir -p %s" fp
         createDirectoryIfMissing True fp
-      XGlob (RelPath fp) -> do
+      XGlob (Loc fp) -> do
         logI $ printf "ls %s" fp
         xs <- listDirectory fp
-        pure [ RelPath fp </> x | x <- xs ]
-      XExists (RelPath fp) -> do
+        pure [ Loc fp </> x | x <- xs ]
+      XExists (Loc fp) -> do
         logI $ printf "test -e %s" fp
         fileExist fp
-      XCopyFile (RelPath src) (RelPath dest) -> do
+      XCopyFile (Loc src) (Loc dest) -> do
         logI $ printf "cp %s %s" src dest
         copyFile src dest
-      XMakeReadOnly (RelPath fp) -> do
+      XMakeReadOnly (Loc fp) -> do
         logI $ printf "chmod a-w %s" fp
         old_mode <- fileMode <$> getFileStatus fp
         let new_mode = intersectFileModes 0o555 old_mode
         setFileMode fp new_mode
-      XReadFile (RelPath p) -> do
-        logI $ printf "cat %s" p
-        readFile p
-      XWriteFile contents (RelPath dest) -> do
+      XReadFile (Loc fp) -> do
+        logI $ printf "cat %s" fp
+        readFile fp
+      XWriteFile contents (Loc dest) -> do
         logI $ printf "cat> %s" dest
         writeFile dest contents
-      XHardLink (RelPath src) (RelPath dest) -> do
+      XHardLink (Loc src) (Loc dest) -> do
         logI $ printf "ln %s %s" src dest
         createLink src dest
-      XRemovelink (RelPath rp) -> do
-        logI $ printf "rm %s" rp
-        removeLink rp
-      XRemoveDirRecursive (RelPath fp) -> do
+      XRemovelink (Loc fp) -> do
+        logI $ printf "rm %s" fp
+        removeLink fp
+      XRemoveDirRecursive (Loc fp) -> do
         logI $ printf "rm -rf %s" fp
         removePathForcibly fp
