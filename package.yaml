@@ -11,6 +11,7 @@ dependencies:
 - containers
 - directory
 - filepath
+- MissingH
 - process
 - split
 - unix

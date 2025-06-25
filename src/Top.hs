@@ -4,6 +4,7 @@ module Top (main) where
 import Control.Monad (ap,liftM)
 import Control.Monad (when)
 import Data.Char qualified as Char
+import Data.Hash.MD5 qualified as MD5
 import Data.List (intercalate)
 import Data.List.Split (splitOn)
 import Data.Map (Map)
@@ -533,11 +534,13 @@ data X a where
   XRet :: a -> X a
   XBind :: X a -> (a -> X b) -> X b
   XLog :: String -> X ()
+
   XRunCommandInDir :: RelPath -> String -> X ()
   XMd5sum :: RelPath -> X Checksum
-  XHash :: String -> X Checksum
   XCopy :: RelPath -> RelPath -> X ()
   XMakeReadOnly :: RelPath -> X ()
+
+  XHash :: String -> X Checksum
   XMakeDir :: RelPath -> X ()
   XGlob :: RelPath -> X [RelPath]
   XExists :: RelPath -> X Bool
@@ -574,12 +577,6 @@ runX Config{seeA,seeX,seeI} = loop
         output <- readCreateProcess (shell command) ""
         let sum = case (splitOn " " output) of [] -> undefined; x:_ -> x
         pure (Checksum sum)
-      XHash contents -> do
-        let command = printf "echo '%s' | md5sum" contents
-        logX command
-        output <- readCreateProcess (shell command) ""
-        let sum = case (splitOn " " output) of [] -> undefined; x:_ -> x
-        pure (Checksum sum)
       XCopy (RelPath src) (RelPath dest) -> do
         let command = printf "cp %s %s" src dest
         logX command
@@ -590,6 +587,10 @@ runX Config{seeA,seeX,seeI} = loop
         callCommand command
 
       -- internal file system access (log equivalent external command)
+      XHash contents -> do
+        logI $ printf "md5sum"
+        let sum = MD5.md5s (MD5.Str contents)
+        pure (Checksum sum)
       XMakeDir (RelPath fp) -> do
         logI $ printf "mkdir -p %s" fp
         createDirectoryIfMissing True fp
