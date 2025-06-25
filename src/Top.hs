@@ -8,7 +8,7 @@ import Data.List (intercalate)
 import Data.List.Split (splitOn)
 import Data.Map (Map)
 import Data.Map qualified as Map
-import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirectory)
+import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirectory,removePathForcibly)
 import System.Environment (getArgs)
 import System.FilePath qualified as FP
 import System.Posix.Files (fileExist,createLink,removeLink)
@@ -154,12 +154,15 @@ instance Show RelPath where show (RelPath fp) = fp
 ----------------------------------------------------------------------
 -- directories locations for cache, sandbox etc
 
-jengaDir,cacheDir,sandboxDir,materializeDir,witDir :: RelPath
+jengaCache,cachedFilesDir,tracesDir :: RelPath
+jengaCache = RelPath ".cache" -- TODO would be better shared at: ~/.cache/jenga/
+cachedFilesDir = jengaCache </> "files"
+tracesDir = jengaCache </> "traces"
+
+jengaDir,sandboxDir,artifactsDir :: RelPath
 jengaDir = RelPath ",jenga"
-cacheDir = jengaDir </> "cache"
 sandboxDir = jengaDir </> "box"
-materializeDir = jengaDir </> "artifacts"
-witDir = jengaDir </> "witness"
+artifactsDir = jengaDir </> "artifacts"
 
 ----------------------------------------------------------------------
 -- Engine main
@@ -278,8 +281,8 @@ data Checksum = Checksum String
 
 materialize :: Checksum -> Key -> B ()
 materialize (Checksum sum) (Key rp) = do
-  let cacheFile = cacheDir </> sum
-  let materializedFile = materializeDir </> show rp
+  let cacheFile = cachedFilesDir </> sum
+  let materializedFile = artifactsDir </> show rp
   Execute $ do
     XMakeDir (dirRelPath materializedFile)
     XExists materializedFile >>= \case
@@ -366,7 +369,7 @@ verifyWitness wks = do
 
 lookupWitness :: WitKeySum -> B (Maybe Witness)
 lookupWitness wks = Execute $ do
-  let witFile = witDir </> show wks
+  let witFile = tracesDir </> show wks
   XExists witFile >>= \case
     False -> pure Nothing
     True -> do
@@ -384,7 +387,7 @@ checksumOfKey (SubStore m1) (StoreWit m2) sought = do
 
 saveWitness :: WitKeySum -> Witness -> B ()
 saveWitness wks wit = do
-  let witFile = witDir </> show wks
+  let witFile = tracesDir </> show wks
   Execute $ do
     XMakeDir (dirRelPath witFile)
     XWriteFile (importWitness wit ++ "\n") witFile
@@ -398,7 +401,7 @@ buildWithRule depSums rule = do
   Execute (setupInputs sandbox inputs deps depSums)
   Execute (XRunCommandInDir sandbox command)
   targetSums <- Execute (cacheOutputs sandbox outputs)
-  -- TODO: remove the sandbox
+  Execute (XRemoveDirRecursive sandbox)
   pure targetSums
 
 setupInputs :: RelPath -> SubStore -> [Key] -> [Checksum] -> X ()
@@ -435,7 +438,7 @@ insertIntoCache rp = do
   pure checksum
 
 cacheFile :: Checksum -> RelPath
-cacheFile (Checksum sum) = cacheDir </> sum
+cacheFile (Checksum sum) = cachedFilesDir </> sum
 
 (</>) :: RelPath -> String -> RelPath
 (</>) (RelPath dir) filename = RelPath (dir FP.</> filename)
@@ -496,11 +499,14 @@ data B a where
 
 runB :: Config -> B a -> IO a
 runB config b = runX config $ do
+  XMakeDir jengaCache
+  XMakeDir cachedFilesDir
+  XMakeDir tracesDir
   XMakeDir jengaDir
-  XMakeDir cacheDir
+  XRemoveDirRecursive sandboxDir
   XMakeDir sandboxDir
-  XMakeDir materializeDir -- TODO: delete everything materialized before
-  XMakeDir witDir
+  XRemoveDirRecursive artifactsDir
+  XMakeDir artifactsDir
   loop b 0 k0
   where
     k0 :: Int -> a -> X a
@@ -539,6 +545,7 @@ data X a where
   XWriteFile :: String -> RelPath -> X ()
   XHardLink :: RelPath -> RelPath -> X ()
   XRemovelink :: RelPath -> X ()
+  XRemoveDirRecursive :: RelPath -> X ()
 
 runX :: Config -> X a -> IO a
 runX Config{seeA,seeX,seeI} = loop
@@ -605,3 +612,6 @@ runX Config{seeA,seeX,seeI} = loop
       XRemovelink (RelPath rp) -> do
         logI $ printf "rm %s" rp
         removeLink rp
+      XRemoveDirRecursive (RelPath fp) -> do
+        logI $ printf "rm -rf %s" fp
+        removePathForcibly fp
