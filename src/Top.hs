@@ -54,8 +54,9 @@ setupLinkRule exe xs =
   GRule $ Rule
     { tag = printf "LINK-%s" (show exe)
     , targets = locateKeys [exe]
-    , deps = locateKeys obs
-    , command = printf "gcc %s -o %s" (baseKeys obs) (baseKey exe)
+    , depcom = do
+        mapM_ need obs
+        pure $ printf "gcc %s -o %s" (baseKeys obs) (baseKey exe)
     }
 
 setupCrule :: String -> G ()
@@ -65,8 +66,9 @@ setupCrule x = do
   GRule $ Rule
     { tag = printf "CC-%s" x
     , targets = locateKeys [o]
-    , deps = locateKeys [c]
-    , command = printf "gcc -c %s -o %s" (baseKey c) (baseKey o)
+    , depcom = do
+        need c
+        pure $ printf "gcc -c %s -o %s" (baseKey c) (baseKey o)
     }
 
 locateKeys :: [Key] -> KeyMap
@@ -77,6 +79,9 @@ cKey x = Key (Loc (x++".c"))
 
 oKey :: String -> Key
 oKey x = Key (Loc (x++".o"))
+
+need :: Key -> D ()
+need key@(Key loc) = DNeed key (baseLoc loc)
 
 ----------------------------------------------------------------------
 -- rule stdlib util code
@@ -129,8 +134,7 @@ data G a where
 data Rule = Rule
   { tag :: String
   , targets :: KeyMap
-  , deps :: KeyMap
-  , command :: String
+  , depcom :: D String -- TODO: better type than String?
   }
 
 data Key = Key Loc deriving (Eq,Ord)
@@ -138,6 +142,19 @@ data Key = Key Loc deriving (Eq,Ord)
 data KeyMap = KeyMap (Map Key Loc)
 
 data Loc = Loc FilePath deriving (Eq,Ord) -- A relative file-path location
+
+----------------------------------------------------------------------
+-- D: dependency monad
+
+instance Functor D where fmap = liftM
+instance Applicative D where pure = DRet; (<*>) = ap
+instance Monad D where (>>=) = DBind
+
+data D a where
+  DRet :: a -> D a
+  DBind :: D a -> (a -> D b) -> D b
+  DNeed :: Key -> Loc -> D ()
+  --DReadKey :: Key -> D String
 
 ----------------------------------------------------------------------
 -- show
@@ -276,6 +293,8 @@ howToBuild System{sources,rules} = do
   Map.fromList (xs1 ++ xs2)
 
 ----------------------------------------------------------------------
+
+----------------------------------------------------------------------
 -- Build
 
 materialize :: Checksum -> Key -> B ()
@@ -308,7 +327,8 @@ doBuild Config{seeB} how roots = mapM demand roots
             -- TODO: document this flow...
             ByRule rule locTarget -> do
               log $ printf "Consult: %s" (show rule)
-              let Rule{command,targets,deps=KeyMap deps} = rule
+              let Rule{targets,depcom} = rule
+              (KeyMap deps,command) <- gatherDeps depcom
 
               wdeps <- (WitMap . Map.fromList) <$>
                 sequence [ do checksum <- demand key; pure (loc,checksum)
@@ -323,12 +343,23 @@ doBuild Config{seeB} how roots = mapM demand roots
 
                 Nothing -> do
                   log $ printf "Execute: %s" (show rule)
-                  wtargets <- buildWithRule wdeps rule
+                  wtargets <- buildWithRule command wdeps rule
                   let val = WitnessValue { wtargets }
                   let wit = Witness { key = witKey, val }
                   saveWitness wks wit
                   let checksum = lookWitMap locTarget wtargets
                   pure checksum
+
+
+gatherDeps :: D a -> B (KeyMap,a)
+gatherDeps d = loop d [] k0
+  where
+    k0 xs a = pure (KeyMap (Map.fromList xs), a)
+    loop :: D a -> [(Key,Loc)] -> ([(Key,Loc)] -> a -> B (KeyMap,b)) -> B (KeyMap, b)
+    loop d xs k = case d of
+      DRet a -> k xs a
+      DBind m f -> loop m xs $ \xs a -> loop (f a) xs k
+      DNeed key loc -> k ((key,loc):xs) ()
 
 
 data Witness = Witness { key :: WitnessKey, val :: WitnessValue }
@@ -388,10 +419,10 @@ saveWitness wks wit = do
     XMakeDir (dirLoc witFile)
     XWriteFile (importWitness wit ++ "\n") witFile
 
-buildWithRule :: WitMap -> Rule -> B WitMap
-buildWithRule depWit rule = do
+buildWithRule :: String -> WitMap -> Rule -> B WitMap
+buildWithRule command depWit rule = do
   sandbox <- NewSandbox
-  let Rule{command,targets} = rule
+  let Rule{targets} = rule
   Execute (XMakeDir sandbox)
   Execute (setupInputs sandbox depWit)
   Execute (XRunCommandInDir sandbox command)
