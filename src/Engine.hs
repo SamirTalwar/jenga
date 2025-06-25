@@ -61,12 +61,13 @@ data Config = Config
   , seeA :: Bool -- log execution of user build commands
   , seeX :: Bool -- log execution of other externally run commands
   , seeI :: Bool -- log execution of internal file system access (i.e not shelling out)
+  , keepSandBoxes :: Bool
   }
 
 parseCommandLine :: [String] -> Config
 parseCommandLine = loop config0
   where
-    config0 = Config False False False False False
+    config0 = Config False False False False False False
     loop :: Config -> [String] -> Config
     loop config = \case
       [] -> config
@@ -75,6 +76,7 @@ parseCommandLine = loop config0
       "-a":xs      -> loop config { seeA = True } xs
       "-x":xs      -> loop config { seeX = True } xs
       "-i":xs      -> loop config { seeI = True } xs
+      "-k":xs      -> loop config { keepSandBoxes = True } xs
       ('-':flag):_ -> error (show ("unknown flag",flag))
       x:_          -> error (show ("unknown arg",x))
 
@@ -155,7 +157,7 @@ materialize (Checksum sum) (Key loc) = do
     XHardLink cacheFile materializedFile
 
 doBuild :: Config -> HowMap -> [Key] -> B [Checksum]
-doBuild Config{seeB} how roots = mapM demand roots
+doBuild config@Config{seeB} how roots = mapM demand roots
   where
     log :: String -> B ()
     log mes = when seeB $ BLog (printf "B: %s" mes)
@@ -192,7 +194,7 @@ doBuild Config{seeB} how roots = mapM demand roots
 
                 Nothing -> do
                   log $ printf "Execute: %s" (show rule)
-                  wtargets <- buildWithRule command wdeps rule
+                  wtargets <- buildWithRule config command wdeps rule
                   let val = WitnessValue { wtargets }
                   let wit = Witness { key = witKey, val }
                   saveWitness wks wit
@@ -210,15 +212,15 @@ gatherDeps d = loop d [] k0
       DBind m f -> loop m xs $ \xs a -> loop (f a) xs k
       DNeed key loc -> k ((key,loc):xs) ()
 
-buildWithRule :: String -> WitMap -> Rule -> B WitMap
-buildWithRule command depWit rule = do
+buildWithRule :: Config -> String -> WitMap -> Rule -> B WitMap
+buildWithRule Config{keepSandBoxes} command depWit rule = do
   sandbox <- NewSandbox
   let Rule{targets} = rule
   Execute (XMakeDir sandbox)
   Execute (setupInputs sandbox depWit)
   Execute (XRunCommandInDir sandbox command)
   targetWit <- Execute (cacheOutputs sandbox targets)
-  Execute (XRemoveDirRecursive sandbox)
+  when (not keepSandBoxes) $ Execute (XRemoveDirRecursive sandbox)
   pure targetWit
 
 setupInputs :: Loc -> WitMap -> X ()
