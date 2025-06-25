@@ -179,7 +179,8 @@ elaborateAndBuild config m = do
         (pluralize (length rules) "rule")
         (pluralize (length roots) "root")
       runB config $ do
-        sums <- doBuild config system roots
+        let how = howToBuild system
+        sums <- doBuild config how roots
         sequence_ [ materialize sum key | (sum,key) <- zip sums roots ]
 
 pluralize :: Int -> String -> String
@@ -214,8 +215,6 @@ parseCommandLine = loop config0
 ----------------------------------------------------------------------
 -- Elaborate
 
-data System = System { roots :: [Key], sources :: [Key], rules :: [Rule] }
-
 type OrErr a = Either ErrMessage a
 data ErrMessage = ErrMessage String
 
@@ -230,12 +229,12 @@ runElaboration config@Config{seeE} m = loop m sys0 k0
     logE :: String -> B ()
     logE mes = when seeE $ BLog (printf "E: %s" mes)
 
+    -- TODO: pass HowMap instead of System; to check for already bound keys
     loop :: G a -> System -> (System -> a -> B (OrErr System)) -> B (OrErr System)
     loop m s k = case m of
       GRet a -> k s a
       GBind m f -> loop m s $ \s a -> loop (f a) s k
       GFail mes -> pure (Left (ErrMessage mes)) -- ignore k
-      -- TODO: as we add rule/source, check no previous def
       GSource key -> do
         logE $ printf "Elaborate source: %s" (show key)
         let System{sources} = s
@@ -256,25 +255,28 @@ runElaboration config@Config{seeE} m = loop m sys0 k0
         k s bool
       GReadKey key -> do
         let system = s
-        _ <- doBuild config system [key] -- build before elaboration is finished
+        let how = howToBuild system
+        _ <- doBuild config how [key] -- building before elaboration is finished
         let Key loc = key
         contents <- Execute (XReadFile loc)
         k s contents
 
+data System = System { roots :: [Key], sources :: [Key], rules :: [Rule] }
+
+type HowMap = Map Key HowToBuild
+data HowToBuild = ByRule Rule Loc | BySource Loc
+
+howToBuild :: System -> HowMap
+howToBuild System{sources,rules} = do
+  let
+    xs1 = [ (key, BySource loc) | key@(Key loc) <- sources ]
+    xs2 = [ (key, ByRule rule loc)
+          | rule@Rule{targets=KeyMap keyMap} <- rules, (key,loc) <- Map.toList keyMap
+          ]
+  Map.fromList (xs1 ++ xs2)
+
 ----------------------------------------------------------------------
 -- Build
-
-data RuleOrSource = ByRule Rule Loc | BySource Loc
-
-data Witness = Witness { key :: WitnessKey, val :: WitnessValue }
-
-data WitnessKey = WitnessKey { command :: String, wdeps :: WitMap } deriving Show
-
-data WitnessValue = WitnessValue { wtargets :: WitMap }
-
-data WitMap = WitMap (Map Loc Checksum) deriving Show
-
-data Checksum = Checksum String
 
 materialize :: Checksum -> Key -> B ()
 materialize (Checksum sum) (Key loc) = do
@@ -284,21 +286,11 @@ materialize (Checksum sum) (Key loc) = do
     XMakeDir (dirLoc materializedFile)
     XHardLink cacheFile materializedFile
 
-doBuild :: Config -> System -> [Key] -> B [Checksum]
-doBuild Config{seeB} System{sources,rules} roots = mapM demand roots
+doBuild :: Config -> HowMap -> [Key] -> B [Checksum]
+doBuild Config{seeB} how roots = mapM demand roots
   where
-
     log :: String -> B ()
     log mes = when seeB $ BLog (printf "B: %s" mes)
-
-    xs1 = [ (key, BySource loc) | key@(Key loc) <- sources ]
-    xs2 = [ (key, ByRule rule loc)
-          | rule@Rule{targets=KeyMap keyMap} <- rules, (key,loc) <- Map.toList keyMap
-          ]
-
-    -- TODO: check no duplicate ways to build a key; better still caller will have checked
-    how :: Map Key RuleOrSource
-    how = Map.fromList (xs1 ++ xs2)
 
     demand :: Key -> B Checksum
     demand key = do
@@ -338,6 +330,21 @@ doBuild Config{seeB} System{sources,rules} roots = mapM demand roots
                   let checksum = lookWitMap locTarget wtargets
                   pure checksum
 
+
+data Witness = Witness { key :: WitnessKey, val :: WitnessValue }
+
+data WitnessKey = WitnessKey { command :: String, wdeps :: WitMap } deriving Show
+
+data WitnessValue = WitnessValue { wtargets :: WitMap }
+
+data WitMap = WitMap (Map Loc Checksum) deriving Show
+
+data WitKeySum = WitKeySum Checksum
+
+data Checksum = Checksum String
+
+instance Show WitKeySum where show (WitKeySum (Checksum sum)) = sum
+
 lookWitMap :: Loc -> WitMap -> Checksum
 lookWitMap loc (WitMap m) = maybe err id $ Map.lookup loc m
   where err = error "lookWitMap"
@@ -346,14 +353,10 @@ lookKeyMap :: Key -> KeyMap -> Loc
 lookKeyMap key (KeyMap m) = maybe err id $ Map.lookup key m
   where err = error "lookKeyMap"
 
-data WitKeySum = WitKeySum String
-
-instance Show WitKeySum where show (WitKeySum sum) = sum
-
 hashWitnessKey :: WitnessKey -> B WitKeySum
 hashWitnessKey wk = do
-  Checksum sum <- Execute (XHash (show wk))
-  pure (WitKeySum sum)
+  checksum <- Execute (XHash (show wk))
+  pure (WitKeySum checksum)
 
 verifyWitness :: WitKeySum -> B (Maybe Witness)
 verifyWitness wks = do
