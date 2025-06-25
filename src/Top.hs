@@ -12,7 +12,7 @@ import Data.Map qualified as Map
 import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirectory,removePathForcibly,copyFile)
 import System.Environment (getArgs)
 import System.FilePath qualified as FP
-import System.Posix.Files (fileExist,createLink,removeLink,getFileStatus,fileMode,intersectFileModes,setFileMode)
+import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode)
 import System.Process (callCommand,shell,readCreateProcess)
 import Text.Printf (printf)
 
@@ -282,9 +282,6 @@ materialize (Checksum sum) (Key loc) = do
   let materializedFile = artifactsDir </> show loc
   Execute $ do
     XMakeDir (dirLoc materializedFile)
-    XExists materializedFile >>= \case
-      False -> pure ()
-      True -> XRemovelink materializedFile
     XHardLink cacheFile materializedFile
 
 doBuild :: Config -> System -> [Key] -> B [Checksum]
@@ -532,7 +529,6 @@ data X a where
   XReadFile :: Loc -> X String
   XWriteFile :: String -> Loc -> X ()
   XHardLink :: Loc -> Loc -> X ()
-  XRemovelink :: Loc -> X ()
   XRemoveDirRecursive :: Loc -> X ()
 
 runX :: Config -> X a -> IO a
@@ -594,9 +590,6 @@ runX Config{seeA,seeX,seeI} = loop
       XHardLink (Loc src) (Loc dest) -> do
         logI $ printf "ln %s %s" src dest
         createLink src dest
-      XRemovelink (Loc fp) -> do
-        logI $ printf "rm %s" fp
-        removeLink fp
       XRemoveDirRecursive (Loc fp) -> do
         logI $ printf "rm -rf %s" fp
         removePathForcibly fp
