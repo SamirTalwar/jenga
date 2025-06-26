@@ -172,7 +172,7 @@ doBuild config@Config{seeB} how roots = mapM demand roots
         Just rs ->
           case rs of
             BySource loc -> do
-              checksum <- Execute (insertIntoCache loc)
+              checksum <- Execute (insertIntoCache Soft loc)
               pure checksum
 
             -- TODO: document this flow...
@@ -234,19 +234,22 @@ cacheOutputs :: Loc -> KeyMap -> X WitMap
 cacheOutputs sandbox (KeyMap m1) = do
   WitMap . Map.fromList <$> sequence
     [ do
-        checksum <- insertIntoCache (sandbox </> show loc)
+        checksum <- insertIntoCache Hard (sandbox </> show loc)
         pure (loc,checksum)
     | (_,loc) <- Map.toList m1
     ]
 
-insertIntoCache :: Loc -> X Checksum
-insertIntoCache loc = do
+data InsertMode = Soft | Hard
+
+insertIntoCache :: InsertMode -> Loc -> X Checksum
+insertIntoCache mode loc = do
+  let insertCommand = case mode of Soft -> XCopyFile; Hard -> XHardLink
   checksum <- XMd5sum loc
   let file = cacheFile checksum
   XExists file >>= \case
     True -> pure ()
     False -> do
-      XCopyFile loc file
+      insertCommand loc file
       XMakeReadOnly file
   pure checksum
 

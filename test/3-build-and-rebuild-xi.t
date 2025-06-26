@@ -36,7 +36,7 @@ Build from clean:
   A: cd ,jenga/box/0; gcc -c fib.c -o fib.o
   X: md5sum ,jenga/box/0/fib.o
   I: test -e .cache/files/47a0ee09b975f7501dbeb5431b76c24c
-  I: cp ,jenga/box/0/fib.o .cache/files/47a0ee09b975f7501dbeb5431b76c24c
+  I: ln ,jenga/box/0/fib.o .cache/files/47a0ee09b975f7501dbeb5431b76c24c
   I: chmod a-w .cache/files/47a0ee09b975f7501dbeb5431b76c24c
   I: rm -rf ,jenga/box/0
   I: mkdir -p .cache/traces
@@ -52,7 +52,7 @@ Build from clean:
   A: cd ,jenga/box/1; gcc -c main.c -o main.o
   X: md5sum ,jenga/box/1/main.o
   I: test -e .cache/files/aac22b6d9cbb6711115a1ebde2cfd6a1
-  I: cp ,jenga/box/1/main.o .cache/files/aac22b6d9cbb6711115a1ebde2cfd6a1
+  I: ln ,jenga/box/1/main.o .cache/files/aac22b6d9cbb6711115a1ebde2cfd6a1
   I: chmod a-w .cache/files/aac22b6d9cbb6711115a1ebde2cfd6a1
   I: rm -rf ,jenga/box/1
   I: mkdir -p .cache/traces
@@ -65,7 +65,7 @@ Build from clean:
   A: cd ,jenga/box/2; gcc fib.o main.o -o main.exe
   X: md5sum ,jenga/box/2/main.exe
   I: test -e .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3
-  I: cp ,jenga/box/2/main.exe .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3
+  I: ln ,jenga/box/2/main.exe .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3
   I: chmod a-w .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3
   I: rm -rf ,jenga/box/2
   I: mkdir -p .cache/traces
