@@ -4,6 +4,15 @@ Redo of the jenga build system.
 Early days still. Figuring out the [Interface](src/Interface.hs)
 between [UserMain](src/UserMain.hs) and the [Engine](src/Engine.hs).
 
+## Prerequisites
+
+- [haskell](https://www.haskell.org) : jenga2 is written and configured using haskel.
+- [cram](https://bitheap.org/cram/) : for testing jenga2
+
+## Build and test
+
+`stack build; cram test`
+
 ## Features
 
 - Language Agnostic.
@@ -14,7 +23,7 @@ between [UserMain](src/UserMain.hs) and the [Engine](src/Engine.hs).
 - Cloud builds possible via sharing `.cache/`.
 - No builtin Watcher mode (yet!)
 
-## Demo build of small c-code [example](example).
+## Explore build of small c-code [example](example).
 
 Things to try:
 - Build from empty cache: `rm -rf .cache; stack run -- -a`
@@ -32,4 +41,4 @@ watch -n 1 stack run -- -a
 
 ## TODO
 
-Lots more examples!
+Lots more examples and tests.
