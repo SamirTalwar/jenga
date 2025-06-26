@@ -6,8 +6,8 @@ between [UserMain](src/UserMain.hs) and the [Engine](src/Engine.hs).
 
 ## Prerequisites
 
-- [haskell](https://www.haskell.org) : jenga2 is written and configured using haskel.
-- [cram](https://bitheap.org/cram/) : for testing jenga2
+- [haskell](https://www.haskell.org) : jenga2 is written and configured using haskell.
+- [cram](https://bitheap.org/cram/) : for testing jenga2.
 
 ## Build and test
 
@@ -18,14 +18,17 @@ between [UserMain](src/UserMain.hs) and the [Engine](src/Engine.hs).
 - Language Agnostic.
 - Haskell DSL for build rule construction.
 - Monadic rule generation & dependencies.
-- Hermetic (Sandboxed) builds.
-- Minimal rebuilds via md5sum caching and constructive traces (Witnesses).
+- Safe, hermetic builds via sandboxing.
+- Minimal rebuilds via constructive traces.
+- Early build cutoff when outputs are unchanged.
+- Full caching; no rebuild required to return to previous build state.
 - Cloud builds possible via sharing `.cache/`.
 - No builtin Watcher mode (yet!)
 
 ## Explore build of small c-code [example](example).
 
 Things to try:
+
 - Build from empty cache: `rm -rf .cache; stack run -- -a`
 - Flags to increase logging: `stack run -- -e -b -a -x`
 - See the cache and artifacts: `find .cache ,jenga`
