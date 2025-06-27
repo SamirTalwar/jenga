@@ -6,7 +6,7 @@ Add '-x -i flags for very detailed logging. Test will be fragile to any change i
 
 Build from clean:
 
-  $ ./jenga.exe -a -x -i
+  $ ./jenga.exe build example -a -x -i
   I: mkdir -p .cache/files
   I: mkdir -p .cache/traces
   I: rm -rf ,jenga
@@ -76,7 +76,7 @@ Build from clean:
 
 Rebuild after no changes:
 
-  $ ./jenga.exe -a -x -i
+  $ ./jenga.exe build example -a -x -i
   I: mkdir -p .cache/files
   I: mkdir -p .cache/traces
   I: rm -rf ,jenga

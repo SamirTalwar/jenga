@@ -17,7 +17,7 @@ What have I got?
 
 Build from clean:
 
-  $ ./jenga.exe -a
+  $ ./jenga.exe build example -a
   elaborated 3 rules and 1 root
   A: cd ,jenga/box/0; gcc -c fib.c -o fib.o
   A: cd ,jenga/box/1; gcc -c main.c -o main.o
@@ -26,5 +26,5 @@ Build from clean:
 
 Rebuild after no changes:
 
-  $ ./jenga.exe -a
+  $ ./jenga.exe build example -a
   elaborated 3 rules and 1 root

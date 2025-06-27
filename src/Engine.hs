@@ -17,10 +17,10 @@ import Interface(G(..),D(..),Rule(..),KeyMap(..),Key(..),Loc(..),(</>),dirLoc)
 ----------------------------------------------------------------------
 -- Engine main
 
-engineMain :: G () -> IO ()
-engineMain userDefs = do
-  config <- parseCommandLine <$> getArgs
-  elaborateAndBuild config userDefs
+engineMain :: ([String] -> G ()) -> IO ()
+engineMain userProg = do
+  config@Config{args} <- parseCommandLine <$> getArgs
+  elaborateAndBuild config (userProg args)
 
 elaborateAndBuild :: Config -> G () -> IO ()
 elaborateAndBuild config m = do
@@ -62,12 +62,18 @@ data Config = Config
   , seeX :: Bool -- log execution of other externally run commands
   , seeI :: Bool -- log execution of internal file system access (i.e not shelling out)
   , keepSandBoxes :: Bool
+  , args :: [FilePath]
   }
 
 parseCommandLine :: [String] -> Config
-parseCommandLine = loop config0
+parseCommandLine = start
   where
-    config0 = Config False False False False False False
+    start = \case
+      [] -> error "need subcommand"
+      "build": xs  -> loop config0 xs
+      ('-':flag):_ -> error (show ("unexpected flag before subcommand",flag))
+      x:_          -> error (show ("unknown subcommand",x))
+    config0 = Config False False False False False False []
     loop :: Config -> [String] -> Config
     loop config = \case
       [] -> config
@@ -78,7 +84,7 @@ parseCommandLine = loop config0
       "-i":xs      -> loop config { seeI = True } xs
       "-k":xs      -> loop config { keepSandBoxes = True } xs
       ('-':flag):_ -> error (show ("unknown flag",flag))
-      x:_          -> error (show ("unknown arg",x))
+      arg:xs       -> loop config { args = args config ++ [arg] } xs
 
 ----------------------------------------------------------------------
 -- Elaborate

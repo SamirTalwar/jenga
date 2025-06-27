@@ -11,8 +11,13 @@ import Interface(G(..),D(..),Rule(..),KeyMap(..),Key(..),Loc(..),(</>),dirLoc,ba
 import Engine (engineMain)
 
 main :: IO ()
-main = engineMain $ do
-  let dir = Loc "example"
+main = engineMain $ \args -> do
+  case args of
+    [] -> GFail "UserMain: nothing to build"
+    _ -> sequence_ [ build (Loc arg ) | arg <- args ]
+
+build :: Loc -> G ()
+build dir = do
   let config = dir </> "config"
   configContents <- readSourceDefaulting "default.exe" config
   main <- Key <$> parseSingleName config configContents
