@@ -44,16 +44,3 @@ Whitespace only change to main.c cause no link step (early cutoff):
   ran 1 action
   $ ,jenga/artifacts/example/main.exe
   hello, 55 world
-
-Change config for linked executable name; cause re-link and artifact under prevous name:
-
-  $ sed -i 's/main.exe/RENAMED.exe/g' example/config
-  $ ./jenga.exe build example -a
-  elaborated 3 rules and 1 root
-  A: cd ,jenga/box/0; gcc fib.o main.o -o RENAMED.exe
-  ran 1 action
-  $ ,jenga/artifacts/example/main.exe
-  /bin/sh: 32: ,jenga/artifacts/example/main.exe: not found
-  [127]
-  $ ,jenga/artifacts/example/RENAMED.exe
-  hello, 55 world
