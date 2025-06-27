@@ -1,6 +1,6 @@
 
   $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
-  $ cp -rp $TESTDIR/../example .
+  $ cp -rp $TESTDIR/example1 example
 
 Add '-x -i flags for very detailed logging. Test will be fragile to any change in example source.
 
