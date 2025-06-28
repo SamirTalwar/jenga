@@ -1,0 +1,2 @@
+This is an example with two .c files and a shared .h
+Which uses CC rules with dependency discovery. (gcc -MM).

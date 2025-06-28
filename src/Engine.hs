@@ -8,10 +8,10 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirectory,removePathForcibly,copyFile)
 import System.Environment (getArgs)
+import System.FilePath qualified as FP
 import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode)
 import System.Process (callCommand,shell,readCreateProcess)
 import Text.Printf (printf)
-import System.FilePath qualified as FP
 
 import Interface(G(..),D(..),Rule(..),Key(..),Loc(..),(</>),dirLoc)
 
@@ -44,7 +44,7 @@ pluralize n what = printf "%d %s%s" n what (if n == 1 then "" else "s")
 -- locations for cache, sandbox etc
 
 jengaCache,cachedFilesDir,tracesDir :: Loc
-jengaCache = Loc ".cache" -- TODO would be better shared at: ~/.cache/jenga/
+jengaCache = Loc ".cache" -- TODO: try access .cache via soft link
 cachedFilesDir = jengaCache </> "files"
 tracesDir = jengaCache </> "traces"
 
@@ -113,7 +113,7 @@ runElaboration config@Config{seeE} m = loop m sys0 k0
       GBind m f -> loop m s $ \s a -> loop (f a) s k
       GFail mes -> pure (Left (ErrMessage mes)) -- ignore k
       GSource key -> do
-        logE $ printf "Elaborate source: %s" (show key)
+        --logE $ printf "Elaborate source: %s" (show key)
         let System{sources} = s
         k s { sources = key : sources } ()
       GRule rule -> do
@@ -121,7 +121,7 @@ runElaboration config@Config{seeE} m = loop m sys0 k0
         let System{rules} = s
         k s { rules = rule : rules } ()
       GRoot key -> do
-        logE $ printf "Elaborate root: %s" (show key)
+        -- logE $ printf "Elaborate root: %s" (show key)
         let System{roots} = s
         k s { roots = key : roots } ()
       GGlob dir -> do
@@ -171,6 +171,12 @@ doBuild config@Config{seeB} how roots = mapM demand roots
     log :: String -> B ()
     log mes = when seeB $ BLog (printf "B: %s" mes)
 
+    readKey :: Key -> B String
+    readKey key = do
+      checksum <- demand key
+      -- TODO: read from cached file which will def be there
+      Execute (XReadFile (cacheFile checksum))
+
     demand :: Key -> B Checksum
     demand requiredKey = do
       log $ printf "Require: %s" (show requiredKey)
@@ -188,7 +194,7 @@ doBuild config@Config{seeB} how roots = mapM demand roots
             ByRule rule locTarget -> do
               log $ printf "Consult: %s" (show rule)
               let Rule{depcom} = rule
-              (deps,command) <- gatherDeps depcom
+              (deps,command) <- gatherDeps readKey depcom
 
               wdeps <- (WitMap . Map.fromList) <$>
                 sequence [ do checksum <- demand dep; pure (locateKey dep,checksum)
@@ -210,8 +216,8 @@ doBuild config@Config{seeB} how roots = mapM demand roots
                   let checksum = lookWitMap locTarget wtargets
                   pure checksum
 
-gatherDeps :: D a -> B ([Key],a)
-gatherDeps d = loop d [] k0
+gatherDeps :: (Key -> B String) -> D a -> B ([Key],a)
+gatherDeps readKey d = loop d [] k0
   where
     k0 xs a = pure (reverse xs,a) -- TODO: sort deps?
     loop :: D a -> [Key] -> ([Key] -> a -> B ([Key],b)) -> B ([Key], b)
@@ -219,6 +225,9 @@ gatherDeps d = loop d [] k0
       DRet a -> k xs a
       DBind m f -> loop m xs $ \xs a -> loop (f a) xs k
       DNeed key -> k (key:xs) ()
+      DReadKey key -> do
+        contents <- readKey key
+        k xs contents
 
 buildWithRule :: Config -> String -> WitMap -> Rule -> B WitMap
 buildWithRule Config{keepSandBoxes} command depWit rule = do

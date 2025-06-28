@@ -13,26 +13,16 @@ Build from clean and run:
   $ ,jenga/artifacts/example/main.exe
   hello, 55 world
 
-Remove the config file to get the default executable name:
+Update config file to link executable with a different name:
 
-  $ rm example/config
-  $ ./jenga.exe build example -a
-  elaborated 3 rules and 1 root
-  A: cd ,jenga/box/0; gcc fib.o main.o -o default.exe
-  ran 1 action
-  $ ,jenga/artifacts/example/main.exe
-  /bin/sh: 14: ,jenga/artifacts/example/main.exe: not found
-  [127]
-  $ ,jenga/artifacts/example/default.exe
-  hello, 55 world
-
-Reinstate config file with a different executable name:
-
-  $ echo RENAMED.exe > example/config
+  $ echo RENAMED.exe > example/cc-basic.jc
   $ ./jenga.exe build example -a
   elaborated 3 rules and 1 root
   A: cd ,jenga/box/0; gcc fib.o main.o -o RENAMED.exe
   ran 1 action
+  $ ,jenga/artifacts/example/main.exe
+  /bin/sh: 14: ,jenga/artifacts/example/main.exe: not found
+  [127]
   $ ,jenga/artifacts/example/RENAMED.exe
   hello, 55 world
 

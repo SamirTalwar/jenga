@@ -12,8 +12,8 @@ What have I got?
   ./example
   ./example/fib.c
   ./example/main.c
-  ./example/config
   ./example/README
+  ./example/cc-basic.jc
 
 Build from clean:
 

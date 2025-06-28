@@ -1,0 +1,84 @@
+
+Get me a jenga executable and the source code for the first example...
+
+  $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
+  $ cp -rp $TESTDIR/example2-discover-deps example
+
+Build from clean:
+  $ ./jenga.exe build example -a
+  elaborated 5 rules and 1 root
+  A: cd ,jenga/box/0; gcc -MG -MM fib.c -MF fib.d
+  A: cd ,jenga/box/1; gcc -c fib.c -o fib.o
+  A: cd ,jenga/box/2; gcc -MG -MM main.c -MF main.d
+  A: cd ,jenga/box/3; gcc -c main.c -o main.o
+  A: cd ,jenga/box/4; gcc fib.o main.o -o main.exe
+  ran 5 actions
+  $ ,jenga/artifacts/example/main.exe
+  hello, 55 world with auto discovery
+
+Zero rebuild:
+  $ ./jenga.exe build example -a
+  elaborated 5 rules and 1 root
+  $ ,jenga/artifacts/example/main.exe
+  hello, 55 world with auto discovery
+
+Change main.c
+  $ sed -i 's/world/UNIVERSE/g' example/main.c
+  $ ./jenga.exe build example -a
+  elaborated 5 rules and 1 root
+  A: cd ,jenga/box/0; gcc -MG -MM main.c -MF main.d
+  A: cd ,jenga/box/1; gcc -c main.c -o main.o
+  A: cd ,jenga/box/2; gcc fib.o main.o -o main.exe
+  ran 3 actions
+  $ ,jenga/artifacts/example/main.exe
+  hello, 55 UNIVERSE with auto discovery
+
+Whitespace change to fib.h
+  $ sed -i 's/int fib/int      fib/g' example/fib.h
+  $ ./jenga.exe build example -a
+  elaborated 5 rules and 1 root
+  A: cd ,jenga/box/0; gcc -c fib.c -o fib.o
+  A: cd ,jenga/box/1; gcc -c main.c -o main.o
+  ran 2 actions
+  $ ,jenga/artifacts/example/main.exe
+  hello, 55 UNIVERSE with auto discovery
+
+Change const value in defs.h
+  $ echo '#define MY_CONST 11' > example/defs.h
+  $ ./jenga.exe build example -a
+  elaborated 5 rules and 1 root
+  A: cd ,jenga/box/0; gcc -c main.c -o main.o
+  A: cd ,jenga/box/1; gcc fib.o main.o -o main.exe
+  ran 2 actions
+  $ ,jenga/artifacts/example/main.exe
+  hello, 89 UNIVERSE with auto discovery
+
+Setup ALT defs file (causes no actions):
+  $ echo '#define MY_CONST 12' > example/defsALT.h
+  $ ./jenga.exe build example -a
+  elaborated 5 rules and 1 root
+
+Switch main to use ALT defs:
+  $ sed -i 's/defs/defsALT/g' example/main.c
+  $ ./jenga.exe build example -a
+  elaborated 5 rules and 1 root
+  A: cd ,jenga/box/0; gcc -MG -MM main.c -MF main.d
+  A: cd ,jenga/box/1; gcc -c main.c -o main.o
+  A: cd ,jenga/box/2; gcc fib.o main.o -o main.exe
+  ran 3 actions
+  $ ,jenga/artifacts/example/main.exe
+  hello, 144 UNIVERSE with auto discovery
+
+Modify original defs file back to original value (causes no action):
+  $ echo '#define MY_CONST 10' > example/defs.h
+  $ ./jenga.exe build example -a
+  elaborated 5 rules and 1 root
+  $ ,jenga/artifacts/example/main.exe
+  hello, 144 UNIVERSE with auto discovery
+
+Switch main back to origianl defs file (causes no action)::
+  $ sed -i 's/defsALT/defs/g' example/main.c
+  $ ./jenga.exe build example -a
+  elaborated 5 rules and 1 root
+  $ ,jenga/artifacts/example/main.exe
+  hello, 55 UNIVERSE with auto discovery

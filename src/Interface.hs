@@ -22,7 +22,7 @@ data G a where
   GBind :: G a -> (a -> G b) -> G b
   GFail :: String -> G a
   GRoot :: Key -> G ()
-  GSource :: Key -> G ()
+  GSource :: Key -> G () -- TODO: avoid need for user to be explicit about this?
   GRule :: Rule -> G ()
   GGlob :: Loc -> G [Loc]
   GExists :: Loc -> G Bool
@@ -44,7 +44,7 @@ data D a where
   DRet :: a -> D a
   DBind :: D a -> (a -> D b) -> D b
   DNeed :: Key -> D ()
-  --DReadKey :: Key -> D String -- TODO: the reason we want monadic deps
+  DReadKey :: Key -> D String
 
 -- Every target & dep is identified by a key
 data Key = Key Loc deriving (Eq,Ord)

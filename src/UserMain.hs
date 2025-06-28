@@ -17,15 +17,44 @@ main = engineMain $ \args -> do
 
 build :: Loc -> G ()
 build dir = do
-  let config = dir </> "config"
-  configContents <- readSourceDefaulting "default.exe" config
-  main <- Key <$> parseSingleName config configContents
-  GRoot main
-  xs <- listBaseNamesWithSuffix dir ".c"
-  mapM_ (GSource . cKey) xs
-  mapM_ setupCrule xs
-  setupLinkRule main xs
-  pure ()
+  -- TODO: better to glob for *,jc & dispatch on all found
+  -- then can error if there is no dispatch mapping setup
+  build1 dir
+  build2 dir
+
+build1 :: Loc -> G ()
+build1 dir = do
+  let config = dir </> "cc-basic.jc"
+  readSourceMaybe config >>= \case
+    Nothing -> pure ()
+    Just configContents -> do
+      main <- Key <$> parseSingleName config configContents
+      GRoot main
+      xs <- listBaseNamesWithSuffix dir ".c"
+      mapM_ (GSource . cKey) xs
+      mapM_ setupCrule xs
+      setupLinkRule main xs
+      pure ()
+
+build2 :: Loc -> G ()
+build2 dir = do
+  let config = dir </> "cc-with-dep-discovery.jc"
+  readSourceMaybe config >>= \case
+    Nothing -> pure ()
+    Just configContents -> do
+      main <- Key <$> parseSingleName config configContents
+      GRoot main
+      declareAllHeaderFilesAsSource dir
+      xs <- listBaseNamesWithSuffix dir ".c"
+      mapM_ (GSource . cKey) xs
+      mapM_ setupCruleAuto xs
+      setupLinkRule main xs
+      pure ()
+
+declareAllHeaderFilesAsSource :: Loc -> G ()
+declareAllHeaderFilesAsSource dir = do
+  xs <- listBaseNamesWithSuffix dir ".h"
+  mapM_ (GSource . hKey) xs
 
 parseSingleName :: Loc -> String -> G Loc
 parseSingleName loc str =
@@ -69,24 +98,66 @@ setupCrule x = do
         pure $ printf "gcc -c %s -o %s" (baseKey c) (baseKey o)
     }
 
+-- TODO: capture common pattern
 cKey :: String -> Key
 cKey x = Key (Loc (x++".c"))
 
 oKey :: String -> Key
 oKey x = Key (Loc (x++".o"))
 
+dKey :: String -> Key
+dKey x = Key (Loc (x++".d"))
+
+hKey :: String -> Key
+hKey x = Key (Loc (x++".h"))
+
+
+setupCruleAuto :: String -> G ()
+setupCruleAuto x = do
+  let c = cKey x
+  let o = oKey x
+  let d = dKey x
+  GRule $ Rule
+    { tag = printf "cc-with-dep-discovery:%s.o" x
+    , targets = [o]
+    , depcom = do
+        DNeed d
+        deps <- readDepsFile d
+        mapM_ DNeed deps
+        pure $ printf "gcc -c %s -o %s" (baseKey c) (baseKey o)
+    }
+  GRule $ Rule
+    { tag = printf "cc-with-dep-discovery:%s.d" x
+    , targets = [d]
+    , depcom = do
+        DNeed c
+        pure $ printf "gcc -MG -MM %s -MF %s" (baseKey c) (baseKey d)
+    }
+
+readDepsFile :: Key -> D [Key]
+readDepsFile key = do
+  let Key loc = key
+  let dir = dirLoc loc
+  names <- parseDepsFile <$> DReadKey key
+  pure [ Key (dir </> name) | name <- names ]
+
+parseDepsFile :: String -> [String]
+parseDepsFile contents =
+  case words contents of
+    [] -> error (show ("parseDepsFile",contents))
+    _:xs -> xs
 
 ----------------------------------------------------------------------
 -- rule stdlib util code
 
-readSourceDefaulting :: String -> Loc -> G String
-readSourceDefaulting def path = do
+readSourceMaybe :: Loc -> G (Maybe String)
+readSourceMaybe path = do
   GExists path >>= \case
-    False -> pure def
+    False -> pure Nothing
     True -> do
       let key = Key path
       GSource key
-      GReadKey key
+      Just <$> GReadKey key
 
 listBaseNamesWithSuffix :: Loc -> String -> G [String]
 listBaseNamesWithSuffix dir sought = do
