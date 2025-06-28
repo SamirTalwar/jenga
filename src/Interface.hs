@@ -3,13 +3,11 @@ module Interface
   ( G(..)
   , D(..)
   , Rule(..)
-  , KeyMap(..)
   , Key(..)
-  , Loc(..), (</>), dirLoc, baseLoc
+  , Loc(..), (</>), dirLoc,
   ) where
 
 import Control.Monad (ap,liftM)
-import Data.Map (Map)
 import System.FilePath qualified as FP
 
 
@@ -32,11 +30,9 @@ data G a where
 
 data Rule = Rule
   { tag :: String
-  , targets :: KeyMap
+  , targets :: [Key]
   , depcom :: D String -- TODO: better type than String?
   }
-
-data KeyMap = KeyMap (Map Key Loc)
 
 -- D: Dependency monad
 
@@ -47,7 +43,7 @@ instance Monad D where (>>=) = DBind
 data D a where
   DRet :: a -> D a
   DBind :: D a -> (a -> D b) -> D b
-  DNeed :: Key -> Loc -> D ()
+  DNeed :: Key -> D ()
   --DReadKey :: Key -> D String -- TODO: the reason we want monadic deps
 
 -- Every target & dep is identified by a key
@@ -64,6 +60,3 @@ instance Show Loc where show (Loc fp) = fp
 
 dirLoc :: Loc -> Loc
 dirLoc (Loc fp) = Loc (FP.takeDirectory fp)
-
-baseLoc :: Loc -> Loc
-baseLoc (Loc fp) = Loc (FP.takeFileName fp)

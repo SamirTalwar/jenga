@@ -11,8 +11,9 @@ import System.Environment (getArgs)
 import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode)
 import System.Process (callCommand,shell,readCreateProcess)
 import Text.Printf (printf)
+import System.FilePath qualified as FP
 
-import Interface(G(..),D(..),Rule(..),KeyMap(..),Key(..),Loc(..),(</>),dirLoc)
+import Interface(G(..),D(..),Rule(..),Key(..),Loc(..),(</>),dirLoc)
 
 ----------------------------------------------------------------------
 -- Engine main
@@ -145,11 +146,13 @@ data HowToBuild = ByRule Rule Loc | BySource Loc
 howToBuild :: System -> HowMap
 howToBuild System{sources,rules} = do
   let
-    xs1 = [ (key, BySource loc) | key@(Key loc) <- sources ]
-    xs2 = [ (key, ByRule rule loc)
-          | rule@Rule{targets=KeyMap keyMap} <- rules, (key,loc) <- Map.toList keyMap
-          ]
+    xs1 = [ (source, BySource loc) | source@(Key loc) <- sources ]
+    xs2 = [ (target, ByRule rule (locateKey target))
+          | rule@Rule{targets} <- rules, target <- targets ]
   Map.fromList (xs1 ++ xs2)
+
+locateKey :: Key -> Loc
+locateKey (Key (Loc fp)) = Loc (FP.takeFileName fp)
 
 ----------------------------------------------------------------------
 -- Build
@@ -169,12 +172,12 @@ doBuild config@Config{seeB} how roots = mapM demand roots
     log mes = when seeB $ BLog (printf "B: %s" mes)
 
     demand :: Key -> B Checksum
-    demand key = do
-      log $ printf "Require: %s" (show key)
-      case Map.lookup key how of
+    demand requiredKey = do
+      log $ printf "Require: %s" (show requiredKey)
+      case Map.lookup requiredKey how of
         Nothing -> do
           -- TODO: this needs to be a softer error
-          error (printf "dont know how to build key: %s" (show key))
+          error (printf "dont know how to build key: %s" (show requiredKey))
         Just rs ->
           case rs of
             BySource loc -> do
@@ -184,19 +187,19 @@ doBuild config@Config{seeB} how roots = mapM demand roots
             -- TODO: document this flow...
             ByRule rule locTarget -> do
               log $ printf "Consult: %s" (show rule)
-              let Rule{targets,depcom} = rule
-              (KeyMap deps,command) <- gatherDeps depcom
+              let Rule{depcom} = rule
+              (deps,command) <- gatherDeps depcom
 
               wdeps <- (WitMap . Map.fromList) <$>
-                sequence [ do checksum <- demand key; pure (loc,checksum)
-                         | (key,loc) <- Map.toList deps
+                sequence [ do checksum <- demand dep; pure (locateKey dep,checksum)
+                         | dep <- deps
                          ]
 
               let witKey = WitnessKey { command, wdeps }
               wks <- hashWitnessKey witKey
               verifyWitness wks >>= \case
                 Just Witness{val=WitnessValue{wtargets}} -> do
-                  pure (lookWitMap (lookKeyMap key targets) wtargets)
+                  pure (lookWitMap (locateKey requiredKey) wtargets)
 
                 Nothing -> do
                   log $ printf "Execute: %s" (show rule)
@@ -207,16 +210,15 @@ doBuild config@Config{seeB} how roots = mapM demand roots
                   let checksum = lookWitMap locTarget wtargets
                   pure checksum
 
-
-gatherDeps :: D a -> B (KeyMap,a)
+gatherDeps :: D a -> B ([Key],a)
 gatherDeps d = loop d [] k0
   where
-    k0 xs a = pure (KeyMap (Map.fromList xs), a)
-    loop :: D a -> [(Key,Loc)] -> ([(Key,Loc)] -> a -> B (KeyMap,b)) -> B (KeyMap, b)
+    k0 xs a = pure (reverse xs,a) -- TODO: sort deps?
+    loop :: D a -> [Key] -> ([Key] -> a -> B ([Key],b)) -> B ([Key], b)
     loop d xs k = case d of
       DRet a -> k xs a
       DBind m f -> loop m xs $ \xs a -> loop (f a) xs k
-      DNeed key loc -> k ((key,loc):xs) ()
+      DNeed key -> k (key:xs) ()
 
 buildWithRule :: Config -> String -> WitMap -> Rule -> B WitMap
 buildWithRule Config{keepSandBoxes} command depWit rule = do
@@ -236,13 +238,14 @@ setupInputs sandbox (WitMap m1) = do
     | (loc,checksum) <- Map.toList m1
     ]
 
-cacheOutputs :: Loc -> KeyMap -> X WitMap
-cacheOutputs sandbox (KeyMap m1) = do
+cacheOutputs :: Loc -> [Key] -> X WitMap
+cacheOutputs sandbox targets = do
   WitMap . Map.fromList <$> sequence
     [ do
+        let loc = locateKey target
         checksum <- insertIntoCache Hard (sandbox </> show loc)
         pure (loc,checksum)
-    | (_,loc) <- Map.toList m1
+    | target <- targets
     ]
 
 data InsertMode = Soft | Hard
@@ -283,10 +286,6 @@ instance Show Checksum where show (Checksum sum) = sum
 lookWitMap :: Loc -> WitMap -> Checksum
 lookWitMap loc (WitMap m) = maybe err id $ Map.lookup loc m
   where err = error "lookWitMap"
-
-lookKeyMap :: Key -> KeyMap -> Loc
-lookKeyMap key (KeyMap m) = maybe err id $ Map.lookup key m
-  where err = error "lookKeyMap"
 
 hashWitnessKey :: WitnessKey -> B WitKeySum
 hashWitnessKey wk = do

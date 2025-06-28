@@ -3,11 +3,10 @@ module UserMain (main) where
 
 import Data.Char qualified as Char
 import Data.List (intercalate)
-import Data.Map qualified as Map
 import System.FilePath qualified as FP
 import Text.Printf (printf)
 
-import Interface(G(..),D(..),Rule(..),KeyMap(..),Key(..),Loc(..),(</>),dirLoc,baseLoc)
+import Interface(G(..),D(..),Rule(..),Key(..),Loc(..),(</>),dirLoc)
 import Engine (engineMain)
 
 main :: IO ()
@@ -52,9 +51,9 @@ setupLinkRule exe xs =
   let obs = [ oKey x | x <- xs ]
   GRule $ Rule
     { tag = printf "LINK-%s" (show exe)
-    , targets = locateKeys [exe]
+    , targets = [exe]
     , depcom = do
-        mapM_ need obs
+        mapM_ DNeed obs
         pure $ printf "gcc %s -o %s" (baseKeys obs) (baseKey exe)
     }
 
@@ -64,14 +63,11 @@ setupCrule x = do
   let o = oKey x
   GRule $ Rule
     { tag = printf "CC-%s" x
-    , targets = locateKeys [o]
+    , targets = [o]
     , depcom = do
-        need c
+        DNeed c
         pure $ printf "gcc -c %s -o %s" (baseKey c) (baseKey o)
     }
-
-locateKeys :: [Key] -> KeyMap
-locateKeys ks = KeyMap (Map.fromList [ (k, baseLoc loc) | k@(Key loc) <- ks ])
 
 cKey :: String -> Key
 cKey x = Key (Loc (x++".c"))
@@ -79,8 +75,6 @@ cKey x = Key (Loc (x++".c"))
 oKey :: String -> Key
 oKey x = Key (Loc (x++".o"))
 
-need :: Key -> D ()
-need key@(Key loc) = DNeed key (baseLoc loc)
 
 ----------------------------------------------------------------------
 -- rule stdlib util code
