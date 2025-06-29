@@ -10,10 +10,11 @@ import Interface(G(..),D(..),Rule(..),Key(..),Loc(..),(</>),dirLoc)
 import Engine (engineMain)
 
 main :: IO ()
-main = engineMain $ \args -> do
-  case args of
+main = engineMain $ \locs -> do
+  --GLog (printf "user main locs=%s" (show locs))
+  case locs of
     [] -> GFail "UserMain: nothing to build"
-    _ -> sequence_ [ build (Loc arg ) | arg <- args ]
+    _ -> mapM_ build locs
 
 build :: Loc -> G ()
 build dir = do
@@ -174,4 +175,3 @@ baseKeys = intercalate " " . map baseKey
 
 baseKey :: Key -> String
 baseKey (Key (Loc fp)) = FP.takeFileName fp
-

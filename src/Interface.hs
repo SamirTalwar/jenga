@@ -20,11 +20,13 @@ instance Monad G where (>>=) = GBind
 data G a where
   GRet :: a -> G a
   GBind :: G a -> (a -> G b) -> G b
+  GLog :: String -> G ()
   GFail :: String -> G a
   GRoot :: Key -> G ()
   GSource :: Key -> G () -- TODO: avoid need for user to be explicit about this?
   GRule :: Rule -> G ()
   GGlob :: Loc -> G [Loc]
+  GIsDirectory :: Loc -> G Bool
   GExists :: Loc -> G Bool
   GReadKey :: Key -> G String
 
@@ -56,7 +58,7 @@ instance Show Rule where show Rule{tag} = tag
 instance Show Loc where show (Loc fp) = fp
 
 (</>) :: Loc -> String -> Loc
-(</>) (Loc dir) filename = Loc (dir FP.</> filename)
+(</>) (Loc dir) filename = Loc (FP.normalise (dir FP.</> filename))
 
 dirLoc :: Loc -> Loc
 dirLoc (Loc fp) = Loc (FP.takeDirectory fp)

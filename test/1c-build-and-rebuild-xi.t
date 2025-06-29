@@ -6,12 +6,26 @@ Add '-x -i flags for very detailed logging. Test will be fragile to any change i
 
 Build from clean:
 
-  $ ./jenga.exe build example -a -x -i
+  $ ./jenga.exe build -a -x -i
   I: mkdir -p .cache/files
   I: mkdir -p .cache/traces
   I: rm -rf ,jenga
   I: mkdir -p ,jenga/box
   I: mkdir -p ,jenga/artifacts
+  I: test -e .
+  I: test -d .
+  I: ls .
+  I: test -d jenga.exe
+  I: test -d .cache
+  I: test -d example
+  I: test -d ,jenga
+  I: ls example
+  I: test -d example/fib.c
+  I: test -d example/main.c
+  I: test -d example/README
+  I: test -d example/cc-basic.jc
+  I: test -e cc-basic.jc
+  I: test -e cc-with-dep-discovery.jc
   I: test -e example/cc-basic.jc
   X: md5sum example/cc-basic.jc
   I: test -e .cache/files/5db0ec4f4b73e5233ab712453fcb0446
@@ -77,12 +91,26 @@ Build from clean:
 
 Rebuild after no changes:
 
-  $ ./jenga.exe build example -a -x -i
+  $ ./jenga.exe build -a -x -i
   I: mkdir -p .cache/files
   I: mkdir -p .cache/traces
   I: rm -rf ,jenga
   I: mkdir -p ,jenga/box
   I: mkdir -p ,jenga/artifacts
+  I: test -e .
+  I: test -d .
+  I: ls .
+  I: test -d jenga.exe
+  I: test -d .cache
+  I: test -d example
+  I: test -d ,jenga
+  I: ls example
+  I: test -d example/fib.c
+  I: test -d example/main.c
+  I: test -d example/README
+  I: test -d example/cc-basic.jc
+  I: test -e cc-basic.jc
+  I: test -e cc-with-dep-discovery.jc
   I: test -e example/cc-basic.jc
   X: md5sum example/cc-basic.jc
   I: test -e .cache/files/5db0ec4f4b73e5233ab712453fcb0446

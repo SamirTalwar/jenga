@@ -3,13 +3,14 @@ module Engine (engineMain) where
 import Control.Monad (ap,liftM)
 import Control.Monad (when)
 import Data.Hash.MD5 qualified as MD5
+import Data.List.Ordered (nubSort)
 import Data.List.Split (splitOn)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirectory,removePathForcibly,copyFile)
 import System.Environment (getArgs)
 import System.FilePath qualified as FP
-import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode)
+import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode,getFileStatus,isDirectory)
 import System.Process (callCommand,shell,readCreateProcess)
 import Text.Printf (printf)
 
@@ -18,10 +19,47 @@ import Interface(G(..),D(..),Rule(..),Key(..),Loc(..),(</>),dirLoc)
 ----------------------------------------------------------------------
 -- Engine main
 
-engineMain :: ([String] -> G ()) -> IO ()
+engineMain :: ([Loc] -> G ()) -> IO ()
 engineMain userProg = do
   config@Config{args} <- parseCommandLine <$> getArgs
-  elaborateAndBuild config (userProg args)
+  let args' = case args of [] -> ["."]; _ -> args
+  elaborateAndBuild config $ do
+    xss <- mapM findStartingPointsFromTopLoc args'
+    let startingLocs = nubSort (concat xss)
+    (userProg startingLocs)
+
+findStartingPointsFromTopLoc :: String -> G [Loc]
+findStartingPointsFromTopLoc arg = do
+  let loc = Loc arg
+  GExists loc >>= \case
+    False -> pure []
+    True -> do
+      GIsDirectory loc >>= \case
+        False -> pure []
+        True -> findSubdirsDeep loc
+
+findSubdirsDeep :: Loc -> G [Loc]
+findSubdirsDeep loc@(Loc fp) = do
+  if blockName fp then pure [] else do
+    subs <- findSubdirs loc
+    subsubs <- mapM findSubdirsDeep subs
+    pure (loc : concat subsubs)
+
+blockName :: String -> Bool
+blockName = \case
+  ".git" -> True
+  ".stack-work" -> True
+  ".cache" -> True
+  ",jenga" -> True
+  _ -> False
+
+findSubdirs :: Loc -> G [Loc]
+findSubdirs loc = do
+  -- TODO: better to use a getSubdir prim, rather that glob+filter(isDir)
+  locs <- GGlob loc
+  blocs <- sequence [ do b <- GIsDirectory loc; pure (b,loc) | loc <- locs ]
+  pure [ loc | (b,loc) <- blocs, b ]
+
 
 elaborateAndBuild :: Config -> G () -> IO ()
 elaborateAndBuild config m = do
@@ -111,6 +149,9 @@ runElaboration config@Config{seeE} m = loop m sys0 k0
     loop m s k = case m of
       GRet a -> k s a
       GBind m f -> loop m s $ \s a -> loop (f a) s k
+      GLog mes -> do
+        Execute (XLog (printf "log: %s" mes))
+        k s ()
       GFail mes -> pure (Left (ErrMessage mes)) -- ignore k
       GSource key -> do
         --logE $ printf "Elaborate source: %s" (show key)
@@ -129,6 +170,9 @@ runElaboration config@Config{seeE} m = loop m sys0 k0
         k s locs
       GExists loc -> do
         bool <- Execute (XExists loc)
+        k s bool
+      GIsDirectory loc -> do
+        bool <- Execute (XIsdirectory loc)
         k s bool
       GReadKey key -> do
         let system = s
@@ -420,6 +464,7 @@ data X a where
   XMakeDir :: Loc -> X ()
   XGlob :: Loc -> X [Loc]
   XExists :: Loc -> X Bool
+  XIsdirectory :: Loc -> X Bool
   XCopyFile :: Loc -> Loc -> X ()
   XMakeReadOnly :: Loc -> X ()
   XReadFile :: Loc -> X String
@@ -465,10 +510,15 @@ runX Config{seeA,seeX,seeI} = loop
       XGlob (Loc fp) -> do
         logI $ printf "ls %s" fp
         xs <- listDirectory fp
+        -- logI $ printf "ls %s --> %s" fp (show xs)
         pure [ Loc fp </> x | x <- xs ]
       XExists (Loc fp) -> do
         logI $ printf "test -e %s" fp
         fileExist fp
+      XIsdirectory (Loc fp) -> do
+        logI $ printf "test -d %s" fp
+        status <- getFileStatus fp
+        pure (isDirectory status)
       XCopyFile (Loc src) (Loc dest) -> do
         logI $ printf "cp %s %s" src dest
         copyFile src dest

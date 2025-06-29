@@ -4,7 +4,7 @@
 
 Build from clean and run:
 
-  $ ./jenga.exe build example -a
+  $ ./jenga.exe build -a
   elaborated 3 rules and 1 root
   A: cd ,jenga/box/0; gcc -c fib.c -o fib.o
   A: cd ,jenga/box/1; gcc -c main.c -o main.o
@@ -16,7 +16,7 @@ Build from clean and run:
 Update config file to link executable with a different name:
 
   $ echo RENAMED.exe > example/cc-basic.jc
-  $ ./jenga.exe build example -a
+  $ ./jenga.exe build -a
   elaborated 3 rules and 1 root
   A: cd ,jenga/box/0; gcc fib.o main.o -o RENAMED.exe
   ran 1 action

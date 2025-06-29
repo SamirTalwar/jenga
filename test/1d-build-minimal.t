@@ -4,7 +4,7 @@
 
 Build from clean:
 
-  $ ./jenga.exe build example -a
+  $ ./jenga.exe build -a
   elaborated 3 rules and 1 root
   A: cd ,jenga/box/0; gcc -c fib.c -o fib.o
   A: cd ,jenga/box/1; gcc -c main.c -o main.o
@@ -19,7 +19,7 @@ Run the built artifact:
 Update main.c "world->UNIVERSE":
 
   $ sed -i 's/world/UNIVERSE/g' example/main.c
-  $ ./jenga.exe build example -a
+  $ ./jenga.exe build -a
   elaborated 3 rules and 1 root
   A: cd ,jenga/box/0; gcc -c main.c -o main.o
   A: cd ,jenga/box/1; gcc fib.o main.o -o main.exe
@@ -30,7 +30,7 @@ Update main.c "world->UNIVERSE":
 Reverting to previous state of main.c causes no rebuilding:
 
   $ sed -i 's/UNIVERSE/world/g' example/main.c
-  $ ./jenga.exe build example -a
+  $ ./jenga.exe build -a
   elaborated 3 rules and 1 root
   $ ,jenga/artifacts/example/main.exe
   hello, 55 world
@@ -38,7 +38,7 @@ Reverting to previous state of main.c causes no rebuilding:
 Whitespace only change to main.c cause no link step (early cutoff):
 
   $ sed -i 's/int main/int      main/g' example/main.c
-  $ ./jenga.exe build example -a
+  $ ./jenga.exe build -a
   elaborated 3 rules and 1 root
   A: cd ,jenga/box/0; gcc -c main.c -o main.o
   ran 1 action
