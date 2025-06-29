@@ -10,44 +10,48 @@ import Interface(G(..),D(..),Rule(..),Key(..),Loc(..),(</>),dirLoc)
 import Engine (engineMain)
 
 main :: IO ()
-main = engineMain $ \locs -> do
-  --GLog (printf "user main locs=%s" (show locs))
-  case locs of
+main = engineMain $ \dirs -> do
+  case dirs of
     [] -> GFail "UserMain: nothing to build"
-    _ -> mapM_ build locs
+    _ -> mapM_ dispatchAllConfigs dirs
 
-build :: Loc -> G ()
-build dir = do
-  -- TODO: better to glob for *,jc & dispatch on all found
-  -- then can error if there is no dispatch mapping setup
-  build1 dir
-  build2 dir
+dispatchAllConfigs :: Loc -> G ()
+dispatchAllConfigs dir = do
+  configNames <- listBaseNamesWithSuffix dir ".jc" -- TODO: .jc --> .jenga ?
+  mapM_ (dispatch1 dir) configNames
 
-build1 :: Loc -> G ()
-build1 dir = do
-  let config = dir </> "cc-basic.jc"
+dispatch1 :: Loc -> String -> G ()
+dispatch1 dir fullName = do
+  let func = dispatch (FP.takeFileName fullName)
+  let config = Loc (fullName ++ ".jc")
   readSourceMaybe config >>= \case
-    Nothing -> pure ()
-    Just configContents -> do
-      main <- Key <$> parseSingleName config configContents
-      GArtifact main
-      xs <- listBaseNamesWithSuffix dir ".c"
-      mapM_ setupCrule xs
-      setupLinkRule main xs
-      pure ()
+    Nothing -> GFail $ printf "unexpected missing config file: %s" (show config)
+    Just configContents ->
+      func dir config configContents
 
-build2 :: Loc -> G ()
-build2 dir = do
-  let config = dir </> "cc-with-dep-discovery.jc"
-  readSourceMaybe config >>= \case
-    Nothing -> pure ()
-    Just configContents -> do
-      main <- Key <$> parseSingleName config configContents
-      GArtifact main
-      xs <- listBaseNamesWithSuffix dir ".c"
-      mapM_ setupCruleAuto xs
-      setupLinkRule main xs
-      pure ()
+dispatch :: String -> (Loc -> Loc -> String -> G ())
+dispatch = \case
+  "cc-basic" -> configCCbasic
+  "cc-with-dep-discovery" -> configCCdepDiscovery
+  name ->
+    \_ _ _ -> GFail $ printf "unknown jenga config file: %s.jc" name
+
+-- TODO: CC stuff to own file
+configCCbasic :: Loc -> Loc -> String -> G ()
+configCCbasic dir config configContents = do
+  main <- Key <$> parseSingleName config configContents
+  GArtifact main
+  xs <- listBaseNamesWithSuffix dir ".c"
+  mapM_ setupCrule xs
+  setupLinkRule main xs
+
+configCCdepDiscovery :: Loc -> Loc -> String -> G ()
+configCCdepDiscovery dir config configContents = do
+  main <- Key <$> parseSingleName config configContents
+  GArtifact main
+  xs <- listBaseNamesWithSuffix dir ".c"
+  mapM_ setupCruleAuto xs
+  setupLinkRule main xs
 
 parseSingleName :: Loc -> String -> G Loc
 parseSingleName loc str =

@@ -24,8 +24,8 @@ Build from clean:
   I: test -d example/main.c
   I: test -d example/README
   I: test -d example/cc-basic.jc
-  I: test -e cc-basic.jc
-  I: test -e cc-with-dep-discovery.jc
+  I: ls .
+  I: ls example
   I: test -e example/cc-basic.jc
   X: md5sum example/cc-basic.jc
   I: test -e .cache/files/5db0ec4f4b73e5233ab712453fcb0446
@@ -36,7 +36,6 @@ Build from clean:
   I: test -e example/fib.o
   I: test -e example/main.o
   I: test -e example/main.exe
-  I: test -e example/cc-with-dep-discovery.jc
   elaborated 3 rules and 3 targets including 1 artifact
   I: mkdir -p .cache/files
   I: mkdir -p .cache/traces
@@ -112,8 +111,8 @@ Rebuild after no changes:
   I: test -d example/main.c
   I: test -d example/README
   I: test -d example/cc-basic.jc
-  I: test -e cc-basic.jc
-  I: test -e cc-with-dep-discovery.jc
+  I: ls .
+  I: ls example
   I: test -e example/cc-basic.jc
   X: md5sum example/cc-basic.jc
   I: test -e .cache/files/5db0ec4f4b73e5233ab712453fcb0446
@@ -122,7 +121,6 @@ Rebuild after no changes:
   I: test -e example/fib.o
   I: test -e example/main.o
   I: test -e example/main.exe
-  I: test -e example/cc-with-dep-discovery.jc
   elaborated 3 rules and 3 targets including 1 artifact
   I: mkdir -p .cache/files
   I: mkdir -p .cache/traces
