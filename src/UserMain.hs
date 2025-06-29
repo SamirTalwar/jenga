@@ -24,10 +24,8 @@ dispatch1 :: Loc -> String -> G ()
 dispatch1 dir fullName = do
   let func = dispatch (FP.takeFileName fullName)
   let config = Loc (fullName ++ ".jc")
-  readSourceMaybe config >>= \case
-    Nothing -> GFail $ printf "unexpected missing config file: %s" (show config)
-    Just configContents ->
-      func dir config configContents
+  configContents <- GReadKey (Key config)
+  func dir config configContents
 
 dispatch :: String -> (Loc -> Loc -> String -> G ())
 dispatch = \case
@@ -142,14 +140,6 @@ parseDepsFile contents =
 
 ----------------------------------------------------------------------
 -- rule stdlib util code
-
-readSourceMaybe :: Loc -> G (Maybe String)
-readSourceMaybe path = do
-  GExists path >>= \case
-    False -> pure Nothing
-    True -> do
-      let key = Key path
-      Just <$> GReadKey key
 
 listBaseNamesWithSuffix :: Loc -> String -> G [String]
 listBaseNamesWithSuffix dir sought = do

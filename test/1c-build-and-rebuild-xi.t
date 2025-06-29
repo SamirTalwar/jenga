@@ -26,7 +26,6 @@ Build from clean:
   I: test -d example/cc-basic.jc
   I: ls .
   I: ls example
-  I: test -e example/cc-basic.jc
   X: md5sum example/cc-basic.jc
   I: test -e .cache/files/5db0ec4f4b73e5233ab712453fcb0446
   I: cp example/cc-basic.jc .cache/files/5db0ec4f4b73e5233ab712453fcb0446
@@ -114,7 +113,6 @@ Rebuild after no changes:
   I: test -d example/cc-basic.jc
   I: ls .
   I: ls example
-  I: test -e example/cc-basic.jc
   X: md5sum example/cc-basic.jc
   I: test -e .cache/files/5db0ec4f4b73e5233ab712453fcb0446
   I: cat example/cc-basic.jc
