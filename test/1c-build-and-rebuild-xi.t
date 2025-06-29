@@ -36,7 +36,8 @@ Build from clean:
   I: test -e example/fib.o
   I: test -e example/main.o
   I: test -e example/main.exe
-  elaborated 3 rules and 3 targets including 1 artifact
+  elaborated 3 rules and 3 targets
+  materalizing 1 artifact
   I: mkdir -p .cache/files
   I: mkdir -p .cache/traces
   I: rm -rf ,jenga
@@ -121,7 +122,8 @@ Rebuild after no changes:
   I: test -e example/fib.o
   I: test -e example/main.o
   I: test -e example/main.exe
-  elaborated 3 rules and 3 targets including 1 artifact
+  elaborated 3 rules and 3 targets
+  materalizing 1 artifact
   I: mkdir -p .cache/files
   I: mkdir -p .cache/traces
   I: rm -rf ,jenga

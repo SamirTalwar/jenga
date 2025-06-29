@@ -61,19 +61,22 @@ findSubdirs loc = do
   pure [ loc | (b,loc) <- blocs, b ]
 
 elaborateAndBuild :: Config -> G () -> IO ()
-elaborateAndBuild config m = do
+elaborateAndBuild config@Config{materializeAll} m = do
   runB config (runElaboration config m) >>= \case
     Left mes -> printf "go -> Error:\n%s\n" (show mes)
     Right system -> do
       let System{artifacts,rules,how} = system
-      printf "elaborated %s and %s including %s\n"
+      let allTargets = Map.keys how
+      let whatToBuild = if materializeAll then allTargets else artifacts
+      printf "elaborated %s and %s\n"
         (pluralize (length rules) "rule")
-        (pluralize (Map.size how) "target")
-        (pluralize (length artifacts) "artifact")
+        (pluralize (length how) "target")
+      printf "materalizing %s\n"
+        (if materializeAll then "all targets" else (pluralize (length artifacts) "artifact"))
       runB config $ do
         let System{how} = system
-        sums <- doBuild config how artifacts
-        sequence_ [ materialize sum key | (sum,key) <- zip sums artifacts ]
+        sums <- doBuild config how whatToBuild
+        sequence_ [ materialize sum key | (sum,key) <- zip sums whatToBuild ]
 
 pluralize :: Int -> String -> String
 pluralize n what = printf "%d %s%s" n what (if n == 1 then "" else "s")
@@ -101,6 +104,7 @@ data Config = Config
   , seeX :: Bool -- log execution of other externally run commands
   , seeI :: Bool -- log execution of internal file system access (i.e not shelling out)
   , keepSandBoxes :: Bool
+  , materializeAll :: Bool
   , args :: [FilePath]
   }
 
@@ -112,7 +116,7 @@ parseCommandLine = start
       "build": xs  -> loop config0 xs
       ('-':flag):_ -> error (show ("unexpected flag before subcommand",flag))
       x:_          -> error (show ("unknown subcommand",x))
-    config0 = Config False False False False False False []
+    config0 = Config False False False False False False False []
     loop :: Config -> [String] -> Config
     loop config = \case
       [] -> config
@@ -122,6 +126,7 @@ parseCommandLine = start
       "-x":xs      -> loop config { seeX = True } xs
       "-i":xs      -> loop config { seeI = True } xs
       "-k":xs      -> loop config { keepSandBoxes = True } xs
+      "-m":xs      -> loop config { materializeAll = True } xs
       ('-':flag):_ -> error (show ("unknown flag",flag))
       arg:xs       -> loop config { args = args config ++ [arg] } xs
 

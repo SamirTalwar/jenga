@@ -8,7 +8,8 @@ Build from clean:
 
   $ ./jenga.exe build -a -x
   X: md5sum example/cc-basic.jc
-  elaborated 3 rules and 3 targets including 1 artifact
+  elaborated 3 rules and 3 targets
+  materalizing 1 artifact
   X: md5sum example/fib.c
   A: cd ,jenga/box/0; gcc -c fib.c -o fib.o
   X: md5sum ,jenga/box/0/fib.o
@@ -23,6 +24,7 @@ Rebuild after no changes:
 
   $ ./jenga.exe build -a -x
   X: md5sum example/cc-basic.jc
-  elaborated 3 rules and 3 targets including 1 artifact
+  elaborated 3 rules and 3 targets
+  materalizing 1 artifact
   X: md5sum example/fib.c
   X: md5sum example/main.c
