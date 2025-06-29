@@ -30,9 +30,8 @@ build1 dir = do
     Nothing -> pure ()
     Just configContents -> do
       main <- Key <$> parseSingleName config configContents
-      GRoot main
+      GArtifact main
       xs <- listBaseNamesWithSuffix dir ".c"
-      mapM_ (GSource . cKey) xs
       mapM_ setupCrule xs
       setupLinkRule main xs
       pure ()
@@ -44,18 +43,11 @@ build2 dir = do
     Nothing -> pure ()
     Just configContents -> do
       main <- Key <$> parseSingleName config configContents
-      GRoot main
-      declareAllHeaderFilesAsSource dir
+      GArtifact main
       xs <- listBaseNamesWithSuffix dir ".c"
-      mapM_ (GSource . cKey) xs
       mapM_ setupCruleAuto xs
       setupLinkRule main xs
       pure ()
-
-declareAllHeaderFilesAsSource :: Loc -> G ()
-declareAllHeaderFilesAsSource dir = do
-  xs <- listBaseNamesWithSuffix dir ".h"
-  mapM_ (GSource . hKey) xs
 
 parseSingleName :: Loc -> String -> G Loc
 parseSingleName loc str =
@@ -109,10 +101,6 @@ oKey x = Key (Loc (x++".o"))
 dKey :: String -> Key
 dKey x = Key (Loc (x++".d"))
 
-hKey :: String -> Key
-hKey x = Key (Loc (x++".h"))
-
-
 setupCruleAuto :: String -> G ()
 setupCruleAuto x = do
   let c = cKey x
@@ -157,7 +145,6 @@ readSourceMaybe path = do
     False -> pure Nothing
     True -> do
       let key = Key path
-      GSource key
       Just <$> GReadKey key
 
 listBaseNamesWithSuffix :: Loc -> String -> G [String]

@@ -6,7 +6,7 @@ Get me a jenga executable and the source code for the first example...
 
 Build from clean:
   $ ./jenga.exe build -a
-  elaborated 5 rules and 1 root
+  elaborated 5 rules and 5 targets including 1 artifact
   A: cd ,jenga/box/0; gcc -MG -MM fib.c -MF fib.d
   A: cd ,jenga/box/1; gcc -c fib.c -o fib.o
   A: cd ,jenga/box/2; gcc -MG -MM main.c -MF main.d
@@ -18,14 +18,14 @@ Build from clean:
 
 Zero rebuild:
   $ ./jenga.exe build -a
-  elaborated 5 rules and 1 root
+  elaborated 5 rules and 5 targets including 1 artifact
   $ ,jenga/artifacts/example/main.exe
   hello, 55 world with auto discovery
 
 Change main.c
   $ sed -i 's/world/UNIVERSE/g' example/main.c
   $ ./jenga.exe build -a
-  elaborated 5 rules and 1 root
+  elaborated 5 rules and 5 targets including 1 artifact
   A: cd ,jenga/box/0; gcc -MG -MM main.c -MF main.d
   A: cd ,jenga/box/1; gcc -c main.c -o main.o
   A: cd ,jenga/box/2; gcc fib.o main.o -o main.exe
@@ -36,7 +36,7 @@ Change main.c
 Whitespace change to fib.h
   $ sed -i 's/int fib/int      fib/g' example/fib.h
   $ ./jenga.exe build -a
-  elaborated 5 rules and 1 root
+  elaborated 5 rules and 5 targets including 1 artifact
   A: cd ,jenga/box/0; gcc -c fib.c -o fib.o
   A: cd ,jenga/box/1; gcc -c main.c -o main.o
   ran 2 actions
@@ -46,7 +46,7 @@ Whitespace change to fib.h
 Change const value in defs.h
   $ echo '#define MY_CONST 11' > example/defs.h
   $ ./jenga.exe build -a
-  elaborated 5 rules and 1 root
+  elaborated 5 rules and 5 targets including 1 artifact
   A: cd ,jenga/box/0; gcc -c main.c -o main.o
   A: cd ,jenga/box/1; gcc fib.o main.o -o main.exe
   ran 2 actions
@@ -56,12 +56,12 @@ Change const value in defs.h
 Setup ALT defs file (causes no actions):
   $ echo '#define MY_CONST 12' > example/defsALT.h
   $ ./jenga.exe build -a
-  elaborated 5 rules and 1 root
+  elaborated 5 rules and 5 targets including 1 artifact
 
 Switch main to use ALT defs:
   $ sed -i 's/defs/defsALT/g' example/main.c
   $ ./jenga.exe build -a
-  elaborated 5 rules and 1 root
+  elaborated 5 rules and 5 targets including 1 artifact
   A: cd ,jenga/box/0; gcc -MG -MM main.c -MF main.d
   A: cd ,jenga/box/1; gcc -c main.c -o main.o
   A: cd ,jenga/box/2; gcc fib.o main.o -o main.exe
@@ -72,13 +72,13 @@ Switch main to use ALT defs:
 Modify original defs file back to original value (causes no action):
   $ echo '#define MY_CONST 10' > example/defs.h
   $ ./jenga.exe build -a
-  elaborated 5 rules and 1 root
+  elaborated 5 rules and 5 targets including 1 artifact
   $ ,jenga/artifacts/example/main.exe
   hello, 144 UNIVERSE with auto discovery
 
 Switch main back to origianl defs file (causes no action)::
   $ sed -i 's/defsALT/defs/g' example/main.c
   $ ./jenga.exe build -a
-  elaborated 5 rules and 1 root
+  elaborated 5 rules and 5 targets including 1 artifact
   $ ,jenga/artifacts/example/main.exe
   hello, 55 UNIVERSE with auto discovery

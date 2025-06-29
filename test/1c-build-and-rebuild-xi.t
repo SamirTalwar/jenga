@@ -33,8 +33,11 @@ Build from clean:
   I: chmod a-w .cache/files/5db0ec4f4b73e5233ab712453fcb0446
   I: cat example/cc-basic.jc
   I: ls example
+  I: test -e example/fib.o
+  I: test -e example/main.o
+  I: test -e example/main.exe
   I: test -e example/cc-with-dep-discovery.jc
-  elaborated 3 rules and 1 root
+  elaborated 3 rules and 3 targets including 1 artifact
   I: mkdir -p .cache/files
   I: mkdir -p .cache/traces
   I: rm -rf ,jenga
@@ -116,8 +119,11 @@ Rebuild after no changes:
   I: test -e .cache/files/5db0ec4f4b73e5233ab712453fcb0446
   I: cat example/cc-basic.jc
   I: ls example
+  I: test -e example/fib.o
+  I: test -e example/main.o
+  I: test -e example/main.exe
   I: test -e example/cc-with-dep-discovery.jc
-  elaborated 3 rules and 1 root
+  elaborated 3 rules and 3 targets including 1 artifact
   I: mkdir -p .cache/files
   I: mkdir -p .cache/traces
   I: rm -rf ,jenga

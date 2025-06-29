@@ -5,7 +5,7 @@
 Build from clean and run:
 
   $ ./jenga.exe build -a
-  elaborated 3 rules and 1 root
+  elaborated 3 rules and 3 targets including 1 artifact
   A: cd ,jenga/box/0; gcc -c fib.c -o fib.o
   A: cd ,jenga/box/1; gcc -c main.c -o main.o
   A: cd ,jenga/box/2; gcc fib.o main.o -o main.exe
@@ -17,7 +17,7 @@ Relocate the example to a new directory - no rebuilds:
 
   $ mv example RELOCATED
   $ ./jenga.exe build -a
-  elaborated 3 rules and 1 root
+  elaborated 3 rules and 3 targets including 1 artifact
   $ ,jenga/artifacts/RELOCATED/main.exe
   hello, 55 world
 
@@ -25,7 +25,7 @@ Duplicate the example directory; build in both places - double #rules, still no 
 
   $ cp -rp RELOCATED ANOTHER
   $ ./jenga.exe build -a
-  elaborated 6 rules and 2 roots
+  elaborated 6 rules and 6 targets including 2 artifacts
   $ ,jenga/artifacts/ANOTHER/main.exe
   hello, 55 world
 
@@ -33,7 +33,7 @@ Modify code in one of the example directories: minimal rebuild as required. shar
 
   $ sed -i 's/fib(10)/fib(20)/g' RELOCATED/main.c
   $ ./jenga.exe build -a
-  elaborated 6 rules and 2 roots
+  elaborated 6 rules and 6 targets including 2 artifacts
   A: cd ,jenga/box/0; gcc -c main.c -o main.o
   A: cd ,jenga/box/1; gcc fib.o main.o -o main.exe
   ran 2 actions

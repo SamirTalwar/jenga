@@ -3,6 +3,7 @@ module Engine (engineMain) where
 import Control.Monad (ap,liftM)
 import Control.Monad (when)
 import Data.Hash.MD5 qualified as MD5
+import Data.List qualified as List (foldl')
 import Data.List.Ordered (nubSort)
 import Data.List.Split (splitOn)
 import Data.Map (Map)
@@ -55,25 +56,24 @@ blockName = \case
 
 findSubdirs :: Loc -> G [Loc]
 findSubdirs loc = do
-  -- TODO: better to use a getSubdir prim, rather that glob+filter(isDir)
   locs <- GGlob loc
   blocs <- sequence [ do b <- GIsDirectory loc; pure (b,loc) | loc <- locs ]
   pure [ loc | (b,loc) <- blocs, b ]
-
 
 elaborateAndBuild :: Config -> G () -> IO ()
 elaborateAndBuild config m = do
   runB config (runElaboration config m) >>= \case
     Left mes -> printf "go -> Error:\n%s\n" (show mes)
     Right system -> do
-      let System{roots,rules} = system
-      printf "elaborated %s and %s\n"
+      let System{artifacts,rules,how} = system
+      printf "elaborated %s and %s including %s\n"
         (pluralize (length rules) "rule")
-        (pluralize (length roots) "root")
+        (pluralize (Map.size how) "target")
+        (pluralize (length artifacts) "artifact")
       runB config $ do
-        let how = howToBuild system
-        sums <- doBuild config how roots
-        sequence_ [ materialize sum key | (sum,key) <- zip sums roots ]
+        let System{how} = system
+        sums <- doBuild config how artifacts
+        sequence_ [ materialize sum key | (sum,key) <- zip sums artifacts ]
 
 pluralize :: Int -> String -> String
 pluralize n what = printf "%d %s%s" n what (if n == 1 then "" else "s")
@@ -95,7 +95,7 @@ artifactsDir = jengaDir </> "artifacts"
 -- Command line: used to control logging
 
 data Config = Config
-  { seeE :: Bool -- log steps for elaboration of rules and roots
+  { seeE :: Bool -- log steps for elaboration of rules and artifacts
   , seeB :: Bool -- log steps for bringing a build up to date
   , seeA :: Bool -- log execution of user build commands
   , seeX :: Bool -- log execution of other externally run commands
@@ -133,67 +133,68 @@ data ErrMessage = ErrMessage String
 
 instance Show ErrMessage where show (ErrMessage s) = printf "Error: %s" s
 
+data System = System { artifacts :: [Key], rules :: [Rule], how :: How }
+
+type How = Map Key Rule
+
 runElaboration :: Config -> G () -> B (OrErr System)
-runElaboration config@Config{seeE} m = loop m sys0 k0
+runElaboration config@Config{seeE} m = loop m system0 k0
   where
-    sys0 :: System
-    sys0 = System { sources = [], rules = [], roots = [] }
+    system0 :: System
+    system0 = System { rules = [], artifacts = [], how = Map.empty }
+
     k0 :: System -> () -> B (OrErr System)
     k0 s () = pure (Right s)
 
     logE :: String -> B ()
     logE mes = when seeE $ BLog (printf "E: %s" mes)
 
-    -- TODO: pass HowMap instead of System; to check for already bound keys
     loop :: G a -> System -> (System -> a -> B (OrErr System)) -> B (OrErr System)
-    loop m s k = case m of
-      GRet a -> k s a
-      GBind m f -> loop m s $ \s a -> loop (f a) s k
+    loop m system k = case m of
+      GRet a -> k system a
+      GBind m f -> loop m system $ \system a -> loop (f a) system k
       GLog mes -> do
         Execute (XLog (printf "log: %s" mes))
-        k s ()
+        k system ()
       GFail mes -> pure (Left (ErrMessage mes)) -- ignore k
-      GSource key -> do
-        --logE $ printf "Elaborate source: %s" (show key)
-        let System{sources} = s
-        k s { sources = key : sources } ()
       GRule rule -> do
+        let Rule{targets} = rule
         logE $ printf "Elaborate rule: %s" (show rule)
-        let System{rules} = s
-        k s { rules = rule : rules } ()
-      GRoot key -> do
-        -- logE $ printf "Elaborate root: %s" (show key)
-        let System{roots} = s
-        k s { roots = key : roots } ()
+        xs <- sequence [ do b <- Execute (XExists loc); pure (key,b)
+                        | key@(Key loc) <- targets ]
+        case [ key | (key,isSource) <- xs, isSource ] of
+          clashS@(_:_) -> do
+            let mes = printf "rule targets clash with source :%s" (show clashS)
+            pure (Left (ErrMessage mes))
+          [] -> do
+            let System{rules,how} = system
+            case filter (flip Map.member how) targets of
+              clashR@(_:_) -> do
+                let mes = printf "rule targets defined by previous rule :%s" (show clashR)
+                pure (Left (ErrMessage mes))
+              [] -> do
+                how <- pure $ List.foldl' (flip (flip Map.insert rule)) how targets
+                k system { rules = rule : rules, how } ()
+
+      GArtifact key -> do
+        -- logE $ printf "Elaborate artifact: %s" (show key)
+        let System{artifacts} = system
+        k system { artifacts = key : artifacts } ()
       GGlob dir -> do
         locs <- Execute (XGlob dir)
-        k s locs
+        k system locs
       GExists loc -> do
         bool <- Execute (XExists loc)
-        k s bool
+        k system bool
       GIsDirectory loc -> do
         bool <- Execute (XIsdirectory loc)
-        k s bool
+        k system bool
       GReadKey key -> do
-        let system = s
-        let how = howToBuild system
+        let System{how} = system
         _ <- doBuild config how [key] -- building before elaboration is finished
         let Key loc = key
         contents <- Execute (XReadFile loc)
-        k s contents
-
-data System = System { roots :: [Key], sources :: [Key], rules :: [Rule] }
-
-type HowMap = Map Key HowToBuild
-data HowToBuild = ByRule Rule Loc | BySource Loc
-
-howToBuild :: System -> HowMap
-howToBuild System{sources,rules} = do
-  let
-    xs1 = [ (source, BySource loc) | source@(Key loc) <- sources ]
-    xs2 = [ (target, ByRule rule (locateKey target))
-          | rule@Rule{targets} <- rules, target <- targets ]
-  Map.fromList (xs1 ++ xs2)
+        k system contents
 
 locateKey :: Key -> Loc
 locateKey (Key (Loc fp)) = Loc (FP.takeFileName fp)
@@ -209,8 +210,8 @@ materialize (Checksum sum) (Key loc) = do
     XMakeDir (dirLoc materializedFile)
     XHardLink cacheFile materializedFile
 
-doBuild :: Config -> HowMap -> [Key] -> B [Checksum]
-doBuild config@Config{seeB} how roots = mapM demand roots
+doBuild :: Config -> How -> [Key] -> B [Checksum]
+doBuild config@Config{seeB} how artifacts = mapM demand artifacts
   where
     log :: String -> B ()
     log mes = when seeB $ BLog (printf "B: %s" mes)
@@ -218,7 +219,6 @@ doBuild config@Config{seeB} how roots = mapM demand roots
     readKey :: Key -> B String
     readKey key = do
       checksum <- demand key
-      -- TODO: read from cached file which will def be there
       Execute (XReadFile (cacheFile checksum))
 
     demand :: Key -> B Checksum
@@ -226,39 +226,37 @@ doBuild config@Config{seeB} how roots = mapM demand roots
       log $ printf "Require: %s" (show requiredKey)
       case Map.lookup requiredKey how of
         Nothing -> do
-          -- TODO: this needs to be a softer error
-          error (printf "dont know how to build key: %s" (show requiredKey))
-        Just rs ->
-          case rs of
-            BySource loc -> do
-              checksum <- Execute (insertIntoCache Soft loc)
+          -- we have no rule; so we hope/assume we have a source
+          let Key loc = requiredKey
+          checksum <- Execute (insertIntoCache Soft loc)
+          pure checksum
+
+        -- TODO: document this flow...
+        Just rule -> do
+          log $ printf "Consult: %s" (show rule)
+          let Rule{depcom} = rule
+          (deps,command) <- gatherDeps readKey depcom
+
+          wdeps <- (WitMap . Map.fromList) <$>
+            sequence [ do checksum <- demand dep; pure (locateKey dep,checksum)
+                     | dep <- deps
+                     ]
+
+          let witKey = WitnessKey { command, wdeps }
+          wks <- hashWitnessKey witKey
+          verifyWitness wks >>= \case
+            Just Witness{val=WitnessValue{wtargets}} -> do
+              pure (lookWitMap (locateKey requiredKey) wtargets)
+
+            Nothing -> do
+              log $ printf "Execute: %s" (show rule)
+              wtargets <- buildWithRule config command wdeps rule
+              let val = WitnessValue { wtargets }
+              let wit = Witness { key = witKey, val }
+              saveWitness wks wit
+              let requiredLoc = locateKey requiredKey
+              let checksum = lookWitMap requiredLoc wtargets
               pure checksum
-
-            -- TODO: document this flow...
-            ByRule rule locTarget -> do
-              log $ printf "Consult: %s" (show rule)
-              let Rule{depcom} = rule
-              (deps,command) <- gatherDeps readKey depcom
-
-              wdeps <- (WitMap . Map.fromList) <$>
-                sequence [ do checksum <- demand dep; pure (locateKey dep,checksum)
-                         | dep <- deps
-                         ]
-
-              let witKey = WitnessKey { command, wdeps }
-              wks <- hashWitnessKey witKey
-              verifyWitness wks >>= \case
-                Just Witness{val=WitnessValue{wtargets}} -> do
-                  pure (lookWitMap (locateKey requiredKey) wtargets)
-
-                Nothing -> do
-                  log $ printf "Execute: %s" (show rule)
-                  wtargets <- buildWithRule config command wdeps rule
-                  let val = WitnessValue { wtargets }
-                  let wit = Witness { key = witKey, val }
-                  saveWitness wks wit
-                  let checksum = lookWitMap locTarget wtargets
-                  pure checksum
 
 gatherDeps :: (Key -> B String) -> D a -> B ([Key],a)
 gatherDeps readKey d = loop d [] k0

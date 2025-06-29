@@ -18,7 +18,7 @@ What have I got?
 Build from clean:
 
   $ ./jenga.exe build -a
-  elaborated 3 rules and 1 root
+  elaborated 3 rules and 3 targets including 1 artifact
   A: cd ,jenga/box/0; gcc -c fib.c -o fib.o
   A: cd ,jenga/box/1; gcc -c main.c -o main.o
   A: cd ,jenga/box/2; gcc fib.o main.o -o main.exe
@@ -27,4 +27,4 @@ Build from clean:
 Rebuild after no changes:
 
   $ ./jenga.exe build -a
-  elaborated 3 rules and 1 root
+  elaborated 3 rules and 3 targets including 1 artifact

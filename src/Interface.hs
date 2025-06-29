@@ -22,8 +22,7 @@ data G a where
   GBind :: G a -> (a -> G b) -> G b
   GLog :: String -> G ()
   GFail :: String -> G a
-  GRoot :: Key -> G ()
-  GSource :: Key -> G () -- TODO: avoid need for user to be explicit about this?
+  GArtifact :: Key -> G ()
   GRule :: Rule -> G ()
   GGlob :: Loc -> G [Loc]
   GIsDirectory :: Loc -> G Bool
