@@ -9,20 +9,21 @@ import Data.List.Split (splitOn)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirectory,removePathForcibly,copyFile)
-import System.Environment (getArgs)
 import System.FilePath qualified as FP
 import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode,getFileStatus,isDirectory)
 import System.Process (callCommand,shell,readCreateProcess)
 import Text.Printf (printf)
 
 import Interface(G(..),D(..),Rule(..),Key(..),Loc(..),(</>),dirLoc)
+import CommandLine qualified (exec)
+import CommandLine (Config(..))
 
 ----------------------------------------------------------------------
 -- Engine main
 
 engineMain :: ([Loc] -> G ()) -> IO ()
 engineMain userProg = do
-  config@Config{args} <- parseCommandLine <$> getArgs
+  config@Config{args} <- CommandLine.exec
   let args' = case args of [] -> ["."]; _ -> args
   elaborateAndBuild config $ do
     xss <- mapM findStartingPointsFromTopLoc args'
@@ -93,42 +94,6 @@ jengaDir,sandboxDir,artifactsDir :: Loc
 jengaDir = Loc ",jenga"
 sandboxDir = jengaDir </> "box"
 artifactsDir = jengaDir </> "artifacts"
-
-----------------------------------------------------------------------
--- Command line: used to control logging
-
-data Config = Config
-  { seeE :: Bool -- log steps for elaboration of rules and artifacts
-  , seeB :: Bool -- log steps for bringing a build up to date
-  , seeA :: Bool -- log execution of user build commands
-  , seeX :: Bool -- log execution of other externally run commands
-  , seeI :: Bool -- log execution of internal file system access (i.e not shelling out)
-  , keepSandBoxes :: Bool
-  , materializeAll :: Bool
-  , args :: [FilePath]
-  }
-
-parseCommandLine :: [String] -> Config
-parseCommandLine = start
-  where
-    start = \case
-      [] -> error "need subcommand"
-      "build": xs  -> loop config0 xs
-      ('-':flag):_ -> error (show ("unexpected flag before subcommand",flag))
-      x:_          -> error (show ("unknown subcommand",x))
-    config0 = Config False False False False False False False []
-    loop :: Config -> [String] -> Config
-    loop config = \case
-      [] -> config
-      "-e":xs      -> loop config { seeE = True } xs
-      "-b":xs      -> loop config { seeB = True } xs
-      "-a":xs      -> loop config { seeA = True } xs
-      "-x":xs      -> loop config { seeX = True } xs
-      "-i":xs      -> loop config { seeI = True } xs
-      "-k":xs      -> loop config { keepSandBoxes = True } xs
-      "-m":xs      -> loop config { materializeAll = True } xs
-      ('-':flag):_ -> error (show ("unknown flag",flag))
-      arg:xs       -> loop config { args = args config ++ [arg] } xs
 
 ----------------------------------------------------------------------
 -- Elaborate

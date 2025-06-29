@@ -13,6 +13,7 @@ dependencies:
 - directory
 - filepath
 - MissingH
+- optparse-applicative
 - process
 - split
 - unix
