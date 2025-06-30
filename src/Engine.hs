@@ -1,5 +1,7 @@
 module Engine (engineMain) where
 
+import CommandLine (Config(..))
+import CommandLine qualified (exec)
 import Control.Monad (ap,liftM)
 import Control.Monad (when)
 import Data.Hash.MD5 qualified as MD5
@@ -8,15 +10,12 @@ import Data.List.Ordered (nubSort)
 import Data.List.Split (splitOn)
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Interface(G(..),D(..),Rule(..),Action(..),Key(..),Loc(..),(</>),dirLoc)
 import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirectory,removePathForcibly,copyFile)
 import System.FilePath qualified as FP
 import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode,getFileStatus,isDirectory)
 import System.Process (callCommand,shell,readCreateProcess)
 import Text.Printf (printf)
-
-import Interface(G(..),D(..),Rule(..),Key(..),Loc(..),(</>),dirLoc)
-import CommandLine qualified (exec)
-import CommandLine (Config(..))
 
 ----------------------------------------------------------------------
 -- Engine main
@@ -86,7 +85,7 @@ pluralize n what = printf "%d %s%s" n what (if n == 1 then "" else "s")
 -- locations for cache, sandbox etc
 
 jengaCache,cachedFilesDir,tracesDir :: Loc
-jengaCache = Loc ".cache" -- TODO: try access .cache via soft link
+jengaCache = Loc ".cache"
 cachedFilesDir = jengaCache </> "files"
 tracesDir = jengaCache </> "traces"
 
@@ -205,14 +204,14 @@ doBuild config@Config{seeB} how artifacts = mapM demand artifacts
         Just rule -> do
           log $ printf "Consult: %s" (show rule)
           let Rule{depcom} = rule
-          (deps,command) <- gatherDeps readKey depcom
+          (deps,action) <- gatherDeps readKey depcom
 
           wdeps <- (WitMap . Map.fromList) <$>
             sequence [ do checksum <- demand dep; pure (locateKey dep,checksum)
                      | dep <- deps
                      ]
 
-          let witKey = WitnessKey { command, wdeps }
+          let witKey = WitnessKey { action, wdeps }
           wks <- hashWitnessKey witKey
           verifyWitness wks >>= \case
             Just Witness{val=WitnessValue{wtargets}} -> do
@@ -220,7 +219,7 @@ doBuild config@Config{seeB} how artifacts = mapM demand artifacts
 
             Nothing -> do
               log $ printf "Execute: %s" (show rule)
-              wtargets <- buildWithRule config command wdeps rule
+              wtargets <- buildWithRule config action wdeps rule
               let val = WitnessValue { wtargets }
               let wit = Witness { key = witKey, val }
               saveWitness wks wit
@@ -241,13 +240,13 @@ gatherDeps readKey d = loop d [] k0
         contents <- readKey key
         k xs contents
 
-buildWithRule :: Config -> String -> WitMap -> Rule -> B WitMap
-buildWithRule Config{keepSandBoxes} command depWit rule = do
+buildWithRule :: Config -> Action -> WitMap -> Rule -> B WitMap
+buildWithRule Config{keepSandBoxes} action depWit rule = do
   sandbox <- NewSandbox
   let Rule{targets} = rule
   Execute (XMakeDir sandbox)
   Execute (setupInputs sandbox depWit)
-  Execute (XRunCommandInDir sandbox command)
+  Execute (XRunActionInDir sandbox action)
   targetWit <- Execute (cacheOutputs sandbox targets)
   when (not keepSandBoxes) $ Execute (XRemoveDirRecursive sandbox)
   pure targetWit
@@ -291,7 +290,7 @@ cacheFile (Checksum sum) = cachedFilesDir </> sum
 
 data Witness = Witness { key :: WitnessKey, val :: WitnessValue }
 
-data WitnessKey = WitnessKey { command :: String, wdeps :: WitMap } deriving Show
+data WitnessKey = WitnessKey { action :: Action, wdeps :: WitMap } deriving Show
 
 data WitnessValue = WitnessValue { wtargets :: WitMap }
 
@@ -365,7 +364,7 @@ type QChecksum = String
 toQ :: Witness -> QWitness
 toQ wit = do
   let Witness{key,val} = wit
-  let WitnessKey{command,wdeps} = key
+  let WitnessKey{action=Bash command,wdeps} = key
   let WitnessValue{wtargets} = val
   let fromStore (WitMap m) = [ (fp,sum) | (Loc fp,Checksum sum) <- Map.toList m ]
   WIT { command, deps = fromStore wdeps, targets = fromStore wtargets }
@@ -373,7 +372,7 @@ toQ wit = do
 fromQ :: QWitness -> Witness
 fromQ WIT{command,deps,targets} = do
   let toStore xs = WitMap (Map.fromList [ (Loc fp,Checksum sum) | (fp,sum) <- xs ])
-  let key = WitnessKey{command,wdeps = toStore deps}
+  let key = WitnessKey{action=Bash command,wdeps = toStore deps}
   let val = WitnessValue{wtargets = toStore targets}
   Witness{key,val}
 
@@ -425,7 +424,7 @@ data X a where
   XBind :: X a -> (a -> X b) -> X b
   XLog :: String -> X ()
 
-  XRunCommandInDir :: Loc -> String -> X ()
+  XRunActionInDir :: Loc -> Action -> X ()
   XMd5sum :: Loc -> X Checksum
 
   XHash :: String -> X Checksum
@@ -455,8 +454,9 @@ runX Config{seeA,seeX,seeI} = loop
       XBind m f -> do a <- loop m; loop (f a)
       XLog s -> do putStrLn s
 
-      -- sandboxed execution of user command
-      XRunCommandInDir (Loc dir) command -> do
+      -- sandboxed execution of user's action; for now always a bash command
+      XRunActionInDir (Loc dir) action -> do
+        let (Bash command) = action
         logA $ printf "cd %s; %s" dir command
         withCurrentDirectory dir (callCommand command)
 

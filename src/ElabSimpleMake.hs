@@ -1,6 +1,6 @@
 module ElabSimpleMake (elab) where
 
-import Interface (G(GRule,GArtifact),Rule(..),Key(..),D(DNeed),Loc,(</>))
+import Interface (G(GRule,GArtifact),Rule(..),Action(..),Key(..),D(DNeed),Loc,(</>))
 import Par4 (Position,Par,parse,position,skip,alts,many,some,sat,lit)
 import Text.Printf (printf)
 
@@ -17,7 +17,7 @@ elab dir s = do
         GRule $ Rule
           { tag = printf "rule@%s" (show pos)
           , targets = map makeKey targets
-          , depcom = do sequence_ [ DNeed (makeKey dep) | dep <- deps ];  pure action
+          , depcom = do sequence_ [ DNeed (makeKey dep) | dep <- deps ];  pure (Bash action)
           }
       makeKey :: String -> Key
       makeKey basename = Key (dir </> basename)

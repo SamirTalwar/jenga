@@ -1,17 +1,17 @@
 
 module Interface
-  ( G(..)
-  , D(..)
-  , Rule(..)
-  , Key(..)
-  , Loc(..), (</>), dirLoc,
+  ( G(..)       -- The Generation monad; used to define rules and artifacts.
+  , Rule(..)    -- A Rule with dynamic dependencies.
+  , Action(..)  -- A user action which is run when a rule triggers.
+  , D(..)       -- The Dependency monad.
+  , Key(..)     -- An identifier for targets and dependencies.
+  , Loc(..)     -- A relative file-path location.
+
+  , (</>), dirLoc
   ) where
 
 import Control.Monad (ap,liftM)
 import System.FilePath qualified as FP
-
-
--- G: (Rule) Generation monad
 
 instance Functor G where fmap = liftM
 instance Applicative G where pure = GRet; (<*>) = ap
@@ -32,10 +32,10 @@ data G a where
 data Rule = Rule
   { tag :: String
   , targets :: [Key]
-  , depcom :: D String -- TODO: better type than String?
+  , depcom :: D Action
   }
 
--- D: Dependency monad
+data Action = Bash String
 
 instance Functor D where fmap = liftM
 instance Applicative D where pure = DRet; (<*>) = ap
@@ -47,13 +47,13 @@ data D a where
   DNeed :: Key -> D ()
   DReadKey :: Key -> D String
 
--- Every target & dep is identified by a key
 data Key = Key Loc deriving (Eq,Ord)
 
-data Loc = Loc FilePath deriving (Eq,Ord) -- A relative file-path location
+data Loc = Loc FilePath deriving (Eq,Ord)
 
-instance Show Key where show (Key loc) = show loc
 instance Show Rule where show Rule{tag} = tag
+instance Show Action where show (Bash command) = command
+instance Show Key where show (Key loc) = show loc
 instance Show Loc where show (Loc fp) = fp
 
 (</>) :: Loc -> String -> Loc

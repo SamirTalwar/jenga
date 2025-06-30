@@ -3,12 +3,11 @@ module UserMain (main) where
 
 import Data.Char qualified as Char
 import Data.List (intercalate)
+import ElabSimpleMake qualified
+import Engine (engineMain)
+import Interface(G(..),D(..),Rule(..),Action(..),Key(..),Loc(..),(</>),dirLoc)
 import System.FilePath qualified as FP
 import Text.Printf (printf)
-
-import Interface(G(..),D(..),Rule(..),Key(..),Loc(..),(</>),dirLoc)
-import Engine (engineMain)
-import ElabSimpleMake qualified
 
 main :: IO ()
 main = engineMain $ \dirs -> do
@@ -84,7 +83,7 @@ setupLinkRule exe xs =
     , targets = [exe]
     , depcom = do
         mapM_ DNeed obs
-        pure $ printf "gcc %s -o %s" (baseKeys obs) (baseKey exe)
+        pure $ Bash (printf "gcc %s -o %s" (baseKeys obs) (baseKey exe))
     }
 
 setupCrule :: String -> G ()
@@ -96,7 +95,7 @@ setupCrule x = do
     , targets = [o]
     , depcom = do
         DNeed c
-        pure $ printf "gcc -c %s -o %s" (baseKey c) (baseKey o)
+        pure $ Bash (printf "gcc -c %s -o %s" (baseKey c) (baseKey o))
     }
 
 -- TODO: capture common pattern
@@ -121,14 +120,14 @@ setupCruleAuto x = do
         DNeed d
         deps <- readDepsFile d
         mapM_ DNeed deps
-        pure $ printf "gcc -c %s -o %s" (baseKey c) (baseKey o)
+        pure $ Bash (printf "gcc -c %s -o %s" (baseKey c) (baseKey o))
     }
   GRule $ Rule
     { tag = printf "cc-with-dep-discovery:%s.d" x
     , targets = [d]
     , depcom = do
         DNeed c
-        pure $ printf "gcc -MG -MM %s -MF %s" (baseKey c) (baseKey d)
+        pure $ Bash (printf "gcc -MG -MM %s -MF %s" (baseKey c) (baseKey d))
     }
 
 readDepsFile :: Key -> D [Key]
