@@ -1,0 +1,6 @@
+
+# The cc.config takes care of standard rules for C compilation and link.
+# But we can add adhoc extra stuff here.
+
+defs.h : defs.h.in
+  grep -v '^$' defs.h.in > defs.h

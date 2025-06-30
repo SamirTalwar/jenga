@@ -1,0 +1,2 @@
+Combine use of cc.jenga (for standard C header dep discovery & executable link)
+With simple-make.jenga (for some adhoc pre-processing)
