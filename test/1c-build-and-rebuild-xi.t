@@ -22,15 +22,15 @@ Build from clean:
   I: ls example
   I: test -d example/fib.c
   I: test -d example/main.c
+  I: test -d example/cc-basic.jenga
   I: test -d example/README
-  I: test -d example/cc-basic.jc
   I: ls .
   I: ls example
-  X: md5sum example/cc-basic.jc
+  X: md5sum example/cc-basic.jenga
   I: test -e .cache/files/5db0ec4f4b73e5233ab712453fcb0446
-  I: cp example/cc-basic.jc .cache/files/5db0ec4f4b73e5233ab712453fcb0446
+  I: cp example/cc-basic.jenga .cache/files/5db0ec4f4b73e5233ab712453fcb0446
   I: chmod a-w .cache/files/5db0ec4f4b73e5233ab712453fcb0446
-  I: cat example/cc-basic.jc
+  I: cat example/cc-basic.jenga
   I: ls example
   I: test -e example/fib.o
   I: test -e example/main.o
@@ -109,13 +109,13 @@ Rebuild after no changes:
   I: ls example
   I: test -d example/fib.c
   I: test -d example/main.c
+  I: test -d example/cc-basic.jenga
   I: test -d example/README
-  I: test -d example/cc-basic.jc
   I: ls .
   I: ls example
-  X: md5sum example/cc-basic.jc
+  X: md5sum example/cc-basic.jenga
   I: test -e .cache/files/5db0ec4f4b73e5233ab712453fcb0446
-  I: cat example/cc-basic.jc
+  I: cat example/cc-basic.jenga
   I: ls example
   I: test -e example/fib.o
   I: test -e example/main.o

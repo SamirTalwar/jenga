@@ -16,7 +16,7 @@ Build from clean and run:
 
 Update config file to link executable with a different name:
 
-  $ echo RENAMED.exe > example/cc-basic.jc
+  $ echo RENAMED.exe > example/cc-basic.jenga
   $ ./jenga.exe build -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact

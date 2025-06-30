@@ -7,7 +7,7 @@ Add '-x' flag for a more detailed logging.
 Build from clean:
 
   $ ./jenga.exe build -ax
-  X: md5sum example/cc-basic.jc
+  X: md5sum example/cc-basic.jenga
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   X: md5sum example/fib.c
@@ -23,7 +23,7 @@ Build from clean:
 Rebuild after no changes:
 
   $ ./jenga.exe build -ax
-  X: md5sum example/cc-basic.jc
+  X: md5sum example/cc-basic.jenga
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   X: md5sum example/fib.c

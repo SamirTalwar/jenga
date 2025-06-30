@@ -10,8 +10,8 @@
   ./example/fib.c
   ./example/main.c
   ./example/fib.h
-  ./example/simple-make.jc
   ./example/README
+  ./example/simple-make.jenga
 
   $ ./jenga.exe build -a
   elaborated 4 rules and 4 targets

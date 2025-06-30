@@ -18,23 +18,23 @@ main = engineMain $ \dirs -> do
 
 dispatchAllConfigs :: Loc -> G ()
 dispatchAllConfigs dir = do
-  configNames <- listBaseNamesWithSuffix dir ".jc" -- TODO: .jc --> .jenga ?
+  configNames <- listBaseNamesWithSuffix dir ".jenga"
   mapM_ (dispatch1 dir) configNames
 
 dispatch1 :: Loc -> String -> G ()
 dispatch1 dir fullName = do
   let func = dispatch (FP.takeFileName fullName)
-  let config = Loc (fullName ++ ".jc")
+  let config = Loc (fullName ++ ".jenga")
   configContents <- GReadKey (Key config)
   func dir config configContents
 
 dispatch :: String -> (Loc -> Loc -> String -> G ())
 dispatch = \case
-  "cc-basic" -> configCCbasic
-  "cc-with-dep-discovery" -> configCCdepDiscovery
+  "cc-basic" -> configCCbasic -- no dep discovery; just for example1
+  "cc" -> configCCdepDiscovery
   "simple-make" -> doSimpleMake
   name ->
-    \_ _ _ -> GFail $ printf "unknown jenga config file: %s.jc" name
+    \_ _ _ -> GFail $ printf "unknown jenga config file: %s.jenga" name
 
 doSimpleMake :: Loc -> Loc -> String -> G ()
 doSimpleMake dir _configFile configContents = do
