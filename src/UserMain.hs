@@ -8,6 +8,7 @@ import Text.Printf (printf)
 
 import Interface(G(..),D(..),Rule(..),Key(..),Loc(..),(</>),dirLoc)
 import Engine (engineMain)
+import ElabSimpleMake qualified
 
 main :: IO ()
 main = engineMain $ \dirs -> do
@@ -31,8 +32,13 @@ dispatch :: String -> (Loc -> Loc -> String -> G ())
 dispatch = \case
   "cc-basic" -> configCCbasic
   "cc-with-dep-discovery" -> configCCdepDiscovery
+  "simple-make" -> doSimpleMake
   name ->
     \_ _ _ -> GFail $ printf "unknown jenga config file: %s.jc" name
+
+doSimpleMake :: Loc -> Loc -> String -> G ()
+doSimpleMake dir _configFile configContents = do
+  ElabSimpleMake.elab dir configContents
 
 -- TODO: CC stuff to own file
 configCCbasic :: Loc -> Loc -> String -> G ()

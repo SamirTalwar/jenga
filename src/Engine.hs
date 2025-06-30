@@ -443,10 +443,11 @@ data X a where
 runX :: Config -> X a -> IO a
 runX Config{seeA,seeX,seeI} = loop
   where
-    logA,logX,logI :: String -> IO ()
+    logA,logX,logI,_logD :: String -> IO ()
     logA mes = when seeA $ printf "A: %s\n" mes
     logX mes = when seeX $ printf "X: %s\n" mes
     logI mes = when seeI $ printf "I: %s\n" mes
+    _logD mes = printf "D: %s\n" mes
 
     loop :: X a -> IO a
     loop x = case x of
@@ -485,8 +486,11 @@ runX Config{seeA,seeX,seeI} = loop
         fileExist fp
       XIsdirectory (Loc fp) -> do
         logI $ printf "test -d %s" fp
-        status <- getFileStatus fp
-        pure (isDirectory status)
+        fileExist fp >>= \case
+          False -> pure False
+          True -> do
+            status <- getFileStatus fp
+            pure (isDirectory status)
       XCopyFile (Loc src) (Loc dest) -> do
         logI $ printf "cp %s %s" src dest
         copyFile src dest
