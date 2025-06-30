@@ -10,7 +10,8 @@ import Data.List.Ordered (nubSort)
 import Data.List.Split (splitOn)
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Interface(G(..),D(..),Rule(..),Action(..),Key(..),Loc(..),(</>),dirLoc)
+import Interface (G(..),D(..),Rule(..),Action(..),Key(..),Loc(..))
+import StdBuildUtils ((</>),dirLoc)
 import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirectory,removePathForcibly,copyFile)
 import System.FilePath qualified as FP
 import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode,getFileStatus,isDirectory)

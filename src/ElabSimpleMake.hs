@@ -1,11 +1,13 @@
 module ElabSimpleMake (elab) where
 
-import Interface (G(GRule,GArtifact),Rule(..),Action(..),Key(..),D(DNeed),Loc,(</>))
+import Interface (G(..),Rule(..),Action(..),D(..),Key(..))
 import Par4 (Position,Par,parse,position,skip,alts,many,some,sat,lit)
+import StdBuildUtils ((</>),dirKey)
 import Text.Printf (printf)
 
-elab :: Loc -> String -> G ()
-elab dir s = do
+elab :: Key -> G ()
+elab config  = do
+  s <- GReadKey config
   let trips = parse gram s
   -- lets define all targets of all triples to be artifacts...
   let artifacts = [ key | Trip{targets} <- trips, key <- targets ]
@@ -19,8 +21,9 @@ elab dir s = do
           , targets = map makeKey targets
           , depcom = do sequence_ [ DNeed (makeKey dep) | dep <- deps ];  pure (Bash action)
           }
+
       makeKey :: String -> Key
-      makeKey basename = Key (dir </> basename)
+      makeKey basename = Key (dirKey config </> basename)
 
 data Trip = Trip
   { pos :: Position
