@@ -208,12 +208,12 @@ doBuild config@Config{seeB} how artifacts = mapM demand artifacts
       Execute (XReadFile file)
 
     demand :: Key -> B Checksum
-    demand requiredKey = do
-      log $ printf "Require: %s" (show requiredKey)
-      case Map.lookup requiredKey how of
+    demand sought = do
+      log $ printf "Require: %s" (show sought)
+      case Map.lookup sought how of
         Nothing -> do
           -- we have no rule; so we hope/assume we have a source
-          let Key loc = requiredKey
+          let Key loc = sought
           checksum <- insertIntoCache Soft loc
           pure checksum
 
@@ -230,7 +230,7 @@ doBuild config@Config{seeB} how artifacts = mapM demand artifacts
 
           let witKey = WitnessKey { action, wdeps }
           wks <- hashWitnessKey witKey
-          verifyWitness requiredKey wks >>= \case
+          verifyWitness sought wks >>= \case
             Just checksum -> do
               pure checksum
 
@@ -240,7 +240,7 @@ doBuild config@Config{seeB} how artifacts = mapM demand artifacts
               let val = WitnessValue { wtargets }
               let wit = Witness { key = witKey, val }
               saveWitness wks wit
-              let checksum = lookWitMap (locateKey requiredKey) wtargets
+              let checksum = lookWitMap (locateKey sought) wtargets
               pure checksum
 
 gatherDeps :: (Key -> B String) -> D a -> B ([Key],a)
