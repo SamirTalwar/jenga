@@ -17,7 +17,7 @@ What have I got?
 
 Build from clean:
 
-  $ ./jenga.exe build -a
+  $ ./jenga.exe build --local-cache -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   A: cd .jbox/0; gcc -c fib.c -o fib.o
@@ -27,6 +27,6 @@ Build from clean:
 
 Rebuild after no changes:
 
-  $ ./jenga.exe build -a
+  $ ./jenga.exe build --local-cache -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact

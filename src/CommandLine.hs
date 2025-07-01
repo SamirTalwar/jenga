@@ -8,7 +8,7 @@ data Config = Config
   , seeA :: Bool
   , seeX :: Bool
   , seeI :: Bool
-  , sharedCache :: Bool
+  , localCache :: Bool
   , keepSandBoxes :: Bool
   , materializeAll :: Bool
   , args :: [FilePath]
@@ -34,8 +34,8 @@ buildCommand = Config <$> e <*> b <*> a <*> x <*> i <*> c <*> k <*> m <*> args
     a = switch (short 'a' <> help "Log execution of user build commands")
     x = switch (short 'x' <> help "Log execution of externally run commands")
     i = switch (short 'i' <> help "Log execution of internal file system access")
-    c = switch (long "shared-cache"
-                <> help "Use shared jenga cache at $HOME/.cache/jenga instead of .cache")
+    c = switch (long "local-cache"
+                <> help "Use local .cache instead of shared cache at $HOME/.cache/jenga")
     k = switch (short 'k' <> long "keep-sandboxes"
                 <> help "Keep all sandboxes when build completes")
     m = switch (short 'm' <> long "materialize-all"

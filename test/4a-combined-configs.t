@@ -14,7 +14,7 @@
   ./example/README
   ./example/simple-make.jenga
 
-  $ ./jenga.exe build -a
+  $ ./jenga.exe build --local-cache -a
   elaborated 6 rules and 6 targets
   materalizing 2 artifacts
   A: cd .jbox/0; grep -v '^$' defs.h.in > defs.h

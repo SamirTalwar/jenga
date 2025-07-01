@@ -23,9 +23,10 @@ import Text.Printf (printf)
 
 engineMain :: ([Loc] -> G ()) -> IO ()
 engineMain userProg = do
-  config@Config{args,sharedCache} <- CommandLine.exec
-  home <- Loc <$> getHomeDirectory
-  let cacheDir = if sharedCache then home </> ".cache/jenga" else Loc ".cache"
+  config@Config{args,localCache} <- CommandLine.exec
+  cacheDir <- if localCache then pure (Loc ".cache") else do
+    home <- Loc <$> getHomeDirectory
+    pure (home </> ".cache/jenga")
   let args' = case args of [] -> ["."]; _ -> args
   elaborateAndBuild cacheDir config $ do
     xss <- mapM findStartingPointsFromTopLoc args'

@@ -6,7 +6,7 @@ Add '-x -i flags for very detailed logging. Test will be fragile to any change i
 
 Build from clean:
 
-  $ ./jenga.exe build -axi
+  $ ./jenga.exe build --local-cache -axi
   I: rm -rf .jbox
   I: rm -rf ,jenga
   I: mkdir -p .cache/files
@@ -92,7 +92,7 @@ Build from clean:
 
 Rebuild after no changes:
 
-  $ ./jenga.exe build -axi
+  $ ./jenga.exe build --local-cache -axi
   I: rm -rf .jbox
   I: rm -rf ,jenga
   I: mkdir -p .cache/files

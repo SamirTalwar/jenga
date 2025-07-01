@@ -4,7 +4,7 @@
 
 Materalize all targets:
 
-  $ ./jenga.exe build -m
+  $ ./jenga.exe build --local-cache -m
   elaborated 3 rules and 3 targets
   materalizing all targets
   ran 3 actions
@@ -18,7 +18,7 @@ Materalize all targets:
 
 Materalize just artifacts:
 
-  $ ./jenga.exe build
+  $ ./jenga.exe build --local-cache
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   $ find ,jenga
