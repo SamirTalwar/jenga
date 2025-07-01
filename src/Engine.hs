@@ -81,6 +81,7 @@ elaborateAndBuild cacheDir config@Config{materializeAll} m = do
       runB cacheDir config $ do
         let System{how} = system
         sums <- doBuild config how whatToBuild
+        -- TODO: materialize as we build, so we see stuff even when build errors
         sequence_ [ materialize sum key | (sum,key) <- zip sums whatToBuild ]
 
 pluralize :: Int -> String -> String
@@ -207,7 +208,7 @@ doBuild config@Config{seeB} how artifacts = mapM demand artifacts
       file <- cacheFile checksum
       Execute (XReadFile file)
 
-    demand :: Key -> B Checksum
+    demand :: Key -> B Checksum -- TODO: detect & error on build cycles
     demand sought = do
       log $ printf "Require: %s" (show sought)
       case Map.lookup sought how of
@@ -263,6 +264,7 @@ buildWithRule Config{keepSandBoxes} action depWit rule = do
   Execute (XMakeDir sandbox)
   setupInputs sandbox depWit
   Execute (XRunActionInDir sandbox action)
+  -- TODO: detect failure in user command and do not cache
   targetWit <- cacheOutputs sandbox targets
   when (not keepSandBoxes) $ Execute (XRemoveDirRecursive sandbox)
   pure targetWit

@@ -53,6 +53,7 @@ gram = start
       alts [nl,commentToEol]
       space -- at least one space char to begin the action
       skip space
+      -- TODO: support comments in action body
       action <- singleAcionLine
       alts [nl,commentToEol]
       skip $ alts [nl,commentToEol]
