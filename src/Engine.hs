@@ -230,9 +230,9 @@ doBuild config@Config{seeB} how artifacts = mapM demand artifacts
 
           let witKey = WitnessKey { action, wdeps }
           wks <- hashWitnessKey witKey
-          verifyWitness wks >>= \case
-            Just Witness{val=WitnessValue{wtargets}} -> do
-              pure (lookWitMap (locateKey requiredKey) wtargets)
+          verifyWitness requiredKey wks >>= \case
+            Just checksum -> do
+              pure checksum
 
             Nothing -> do
               log $ printf "Execute: %s" (show rule)
@@ -240,8 +240,7 @@ doBuild config@Config{seeB} how artifacts = mapM demand artifacts
               let val = WitnessValue { wtargets }
               let wit = Witness { key = witKey, val }
               saveWitness wks wit
-              let requiredLoc = locateKey requiredKey
-              let checksum = lookWitMap requiredLoc wtargets
+              let checksum = lookWitMap (locateKey requiredKey) wtargets
               pure checksum
 
 gatherDeps :: (Key -> B String) -> D a -> B ([Key],a)
@@ -334,16 +333,20 @@ hashWitnessKey wk = do
   checksum <- Execute (XHash (show wk))
   pure (WitKeySum checksum)
 
-verifyWitness :: WitKeySum -> B (Maybe Witness)
-verifyWitness wks = do
+verifyWitness :: Key -> WitKeySum -> B (Maybe Checksum)
+verifyWitness sought wks = do
   lookupWitness wks >>= \case
     Nothing -> pure Nothing
     Just wit -> do
       let Witness{val} = wit
-      let WitnessValue{wtargets=WitMap m} = val
+      let WitnessValue{wtargets} = val
+      let WitMap m = wtargets
       ok <- all id <$> sequence [ existsCacheFile sum | (_,sum) <- Map.toList m ]
       if not ok then pure Nothing else do
-        pure (Just wit)
+        -- The following lookup can fail if the sought-key was not recorded.
+        -- i.e. we have added a target; but the actions/deps are otherwise unchanged
+        -- the user action will have to be rerun.
+        pure $ Map.lookup (locateKey sought) m
 
 lookupWitness :: WitKeySum -> B (Maybe Witness)
 lookupWitness wks = do
