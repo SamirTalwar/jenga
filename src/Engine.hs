@@ -208,8 +208,20 @@ doBuild config@Config{seeB} how artifacts = mapM demand artifacts
       file <- cacheFile checksum
       Execute (XReadFile file)
 
-    demand :: Key -> B Checksum -- TODO: detect & error on build cycles
+    -- TODO: detect & error on build cycles
+    demand :: Key -> B Checksum
     demand sought = do
+      BGetKey sought >>= \case
+        Just sum -> pure sum
+        Nothing -> do
+          sum <- demand1 sought
+          -- TODO: better to memoize all targets from the same rule
+          -- would need to return the WitMap from the recursion
+          BSetKey sought sum
+          pure sum
+
+    demand1 :: Key -> B Checksum
+    demand1 sought = do
       log $ printf "Require: %s" (show sought)
       case Map.lookup sought how of
         Nothing -> do
@@ -252,6 +264,9 @@ gatherDeps readKey d = loop d [] k0
     loop d xs k = case d of
       DRet a -> k xs a
       DBind m f -> loop m xs $ \xs a -> loop (f a) xs k
+      DLog mes -> do
+        Execute (XLog (printf "log: %s" mes))
+        k xs ()
       DNeed key -> k (key:xs) ()
       DReadKey key -> do
         contents <- readKey key
@@ -421,24 +436,41 @@ data B a where
   BCacheDir :: B Loc
   BNewSandbox :: B Loc
   Execute :: X a -> B a
+  BGetKey :: Key -> B (Maybe Checksum)
+  BSetKey :: Key -> Checksum -> B ()
 
 runB :: Loc -> Config -> B a -> IO a
 runB cacheDir config b = runX config $ do
-  loop b 0 k0
+  loop b state0 k0
   where
-    k0 :: Int -> a -> X a
-    k0 i a = do
+    state0 = BState { sandboxCounter = 0, memo = Map.empty }
+
+    k0 :: BState -> a -> X a
+    k0 BState{sandboxCounter=i} a = do
       when (i>0) $ XLog (printf "ran %s" (pluralize i "action"))
       pure a
 
-    loop :: B a -> Int -> (Int -> a -> X b) -> X b
-    loop m0 i k = case m0 of
-      BRet a -> k i a
-      BBind m f -> loop m i $ \i a -> loop (f a) i k
-      BLog s -> do XLog s; k i ()
-      BCacheDir -> k i cacheDir
-      BNewSandbox -> k (i+1) (sandboxDir </> show i)
-      Execute x -> do a <- x; k i a
+    loop :: B a -> BState -> (BState -> a -> X b) -> X b
+    loop m0 s k = case m0 of
+      BRet a -> k s a
+      BBind m f -> loop m s $ \s a -> loop (f a) s k
+      BLog mes -> do XLog mes; k s ()
+      BCacheDir -> k s cacheDir
+      BNewSandbox -> do
+        let BState{sandboxCounter=i} = s
+        k s { sandboxCounter = i+1 } (sandboxDir </> show i)
+      Execute x -> do a <- x; k s a
+      BGetKey key -> do
+        let BState{memo} = s
+        case Map.lookup key memo of
+          Nothing -> k s Nothing
+          Just sum -> k s (Just sum)
+
+      BSetKey key sum -> do
+        let BState{memo} = s
+        k s { memo = Map.insert key sum memo } ()
+
+data BState = BState { sandboxCounter :: Int, memo :: Map Key Checksum }
 
 ----------------------------------------------------------------------
 -- X: execution monad

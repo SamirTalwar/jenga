@@ -6,6 +6,7 @@ import Interface (G(..),Rule(..),Action(..),D(..),Key(..))
 import Par4 (Position,Par,parse,position,skip,alts,many,some,sat,lit)
 import StdBuildUtils ((</>),dirKey)
 import Text.Printf (printf)
+import Data.List.Split (splitOn)
 
 elab :: Key -> G ()
 elab config  = do
@@ -13,7 +14,7 @@ elab config  = do
   let trips = parse gram s
   -- All targets which aren't also deps are considered to be artifcats
   let targets = [ key | Trip{targets} <- trips, key <- targets ]
-  let deps = [ key | Trip{deps} <- trips, key <- deps ]
+  let deps = [ case dep of Dep k -> k; Scanner k -> k  | Trip{deps} <- trips, dep <- deps ]
   let artifacts = Set.toList (Set.fromList targets \\ Set.fromList deps)
   sequence_ [ GArtifact (makeKey key) | key <- artifacts ]
   mapM_ elabTrip trips
@@ -23,18 +24,49 @@ elab config  = do
         GRule $ Rule
           { tag = printf "rule@%s" (show pos)
           , targets = map makeKey targets
-          , depcom = do sequence_ [ DNeed (makeKey dep) | dep <- deps ];  pure (Bash action)
+          , depcom = do sequence_ [ makeDep targets dep | dep <- deps ];  pure (Bash action)
           }
+
+
+      makeDep targets = \case
+        Dep file -> DNeed (makeKey file)
+        Scanner file -> do
+          let key = makeKey file
+          contents <- DReadKey key
+          let deps = filterDepsFor targets contents
+          --DLog (printf "makeDep %s -> %s" (show targets) (show deps)) -- TODO: this line shows dups
+          sequence_ [ DNeed (makeKey dep) | dep <- deps ]
 
       makeKey :: String -> Key
       makeKey basename = Key (dirKey config </> basename)
 
+filterDepsFor :: [String] -> String -> [String]
+filterDepsFor targets contents = do
+
+  let
+    parse1 :: String -> Maybe ([String],[String])
+    parse1 line =
+      case splitOn ":" line of
+        [left,right] -> Just (words left, words right)
+        _ -> Nothing
+
+    parse :: String -> [String]
+    parse line =
+      case (parse1 line) of
+        Nothing -> [] -- comment or garbage we dont understand
+        Just (as,bs) -> if any (`elem` targets) as then bs else []
+
+  [ dep | line <- lines contents, dep <- parse line ]
+
+
 data Trip = Trip
   { pos :: Position
   , targets :: [String]
-  , deps :: [String]
+  , deps :: [Dep]
   , action :: String
   }
+
+data Dep = Dep String | Scanner String
 
 -- grammar for traditional "make-style" triples, spread over two lines
 gram :: Par [Trip]
@@ -49,7 +81,7 @@ gram = start
       targets <- many identifier
       lit ':'
       skip space
-      deps <- many identifier
+      deps <- many dep
       alts [nl,commentToEol]
       space -- at least one space char to begin the action
       skip space
@@ -58,6 +90,10 @@ gram = start
       alts [nl,commentToEol]
       skip $ alts [nl,commentToEol]
       pure $ Trip {pos,targets,deps,action}
+
+    dep = do
+      alts [ do lit '@'; x <- identifier; pure (Scanner x)
+           , Dep <$> identifier ]
 
     identifier = do
       res <- some identifierChar

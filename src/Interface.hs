@@ -40,6 +40,7 @@ instance Monad D where (>>=) = DBind
 data D a where
   DRet :: a -> D a
   DBind :: D a -> (a -> D b) -> D b
+  DLog :: String -> D ()
   DNeed :: Key -> D ()
   DReadKey :: Key -> D String
 
