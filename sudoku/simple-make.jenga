@@ -1,0 +1,30 @@
+
+# jenga build rules for sampele haskell program. Grabbed from: https://github.com/Nick-Chapman/sudoku
+# This is a step towards generalizing build rule creation for any haskell project.
+
+
+# Build the Haskell source (with explicit dependencies)
+
+Sudoku.hi Sudoku.o : ghc.exe Sudoku.hs
+ ./ghc.exe -c Sudoku.hs -XLambdaCase
+
+main.hi main.o : ghc.exe main.hs Sudoku.hi
+ ./ghc.exe -c main.hs
+
+
+# Link the executable (including the containers package)
+
+solver.exe : ghc.exe main.o Sudoku.o
+  ./ghc.exe main.o Sudoku.o -package containers -o solver.exe
+
+
+# Run the executable
+
+wheel.solution : wheel.puzzle solver.exe
+  ./solver.exe wheel.puzzle | tee wheel.solution
+
+
+# Find the most recent ghc binary installed in ~/.stack and create a dispatcher script
+
+ghc.exe :
+  echo exec $(find $HOME/.stack | grep lib/.*/bin/ghc$ | sort -n | tail -1) '"$@"' > ghc.exe ; chmod +x ghc.exe
