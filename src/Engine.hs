@@ -12,7 +12,7 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import Interface (G(..),D(..),Rule(..),Action(..),Key(..),Loc(..))
 import StdBuildUtils ((</>),dirLoc)
-import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirectory,removePathForcibly,copyFile)
+import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirectory,removePathForcibly,copyFile,getHomeDirectory)
 import System.FilePath qualified as FP
 import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode,getFileStatus,isDirectory)
 import System.Process (callCommand,shell,readCreateProcess)
@@ -23,9 +23,11 @@ import Text.Printf (printf)
 
 engineMain :: ([Loc] -> G ()) -> IO ()
 engineMain userProg = do
-  config@Config{args} <- CommandLine.exec
+  config@Config{args,sharedCache} <- CommandLine.exec
+  home <- Loc <$> getHomeDirectory
+  let cacheDir = if sharedCache then home </> ".cache/jenga" else Loc ".cache"
   let args' = case args of [] -> ["."]; _ -> args
-  elaborateAndBuild config $ do
+  elaborateAndBuild cacheDir config $ do
     xss <- mapM findStartingPointsFromTopLoc args'
     let startingLocs = nubSort (concat xss)
     (userProg startingLocs)
@@ -61,9 +63,10 @@ findSubdirs loc = do
   blocs <- sequence [ do b <- GIsDirectory loc; pure (b,loc) | loc <- locs ]
   pure [ loc | (b,loc) <- blocs, b ]
 
-elaborateAndBuild :: Config -> G () -> IO ()
-elaborateAndBuild config@Config{materializeAll} m = do
-  runB config (runElaboration config m) >>= \case -- TODO: two calls to runB ?
+elaborateAndBuild :: Loc -> Config -> G () -> IO () -- TODO: move runB to caller
+elaborateAndBuild cacheDir config@Config{materializeAll} m = do
+  runB cacheDir config initDirs
+  runB cacheDir config (runElaboration config m) >>= \case
     Left mes -> printf "go -> Error:\n%s\n" (show mes)
     Right system -> do
       let System{artifacts,rules,how} = system
@@ -74,7 +77,7 @@ elaborateAndBuild config@Config{materializeAll} m = do
         (pluralize (length how) "target")
       printf "materalizing %s\n"
         (if materializeAll then "all targets" else (pluralize (length artifacts) "artifact"))
-      runB config $ do
+      runB cacheDir config $ do
         let System{how} = system
         sums <- doBuild config how whatToBuild
         sequence_ [ materialize sum key | (sum,key) <- zip sums whatToBuild ]
@@ -85,15 +88,25 @@ pluralize n what = printf "%d %s%s" n what (if n == 1 then "" else "s")
 ----------------------------------------------------------------------
 -- locations for cache, sandbox etc
 
--- TODO: command line option(s) to choose cache location: local(.) or (home) ~/.cache/jenga
-jengaCache,cachedFilesDir,tracesDir :: Loc
-jengaCache = Loc ".cache"
-cachedFilesDir = jengaCache </> "files"
-tracesDir = jengaCache </> "traces"
+cachedFilesDir,tracesDir :: B Loc
+cachedFilesDir = do cacheDir <- BCacheDir; pure (cacheDir </> "files")
+tracesDir = do cacheDir <- BCacheDir; pure (cacheDir </> "traces")
 
 sandboxDir,artifactsDir :: Loc
 artifactsDir = Loc ",jenga"
 sandboxDir = Loc ".jbox"
+
+initDirs :: B ()
+initDirs = do
+  tracesDir <- tracesDir
+  cachedFilesDir <- cachedFilesDir
+  Execute $ do
+    XRemoveDirRecursive sandboxDir
+    XRemoveDirRecursive artifactsDir
+    XMakeDir cachedFilesDir
+    XMakeDir tracesDir
+    XMakeDir sandboxDir
+    XMakeDir artifactsDir
 
 ----------------------------------------------------------------------
 -- Elaborate
@@ -174,6 +187,7 @@ locateKey (Key (Loc fp)) = Loc (FP.takeFileName fp)
 
 materialize :: Checksum -> Key -> B ()
 materialize (Checksum sum) (Key loc) = do
+  cachedFilesDir <- cachedFilesDir
   let cacheFile = cachedFilesDir </> sum
   let materializedFile = artifactsDir </> show loc
   Execute $ do
@@ -189,7 +203,8 @@ doBuild config@Config{seeB} how artifacts = mapM demand artifacts
     readKey :: Key -> B String
     readKey key = do
       checksum <- demand key
-      Execute (XReadFile (cacheFile checksum))
+      file <- cacheFile checksum
+      Execute (XReadFile file)
 
     demand :: Key -> B Checksum
     demand requiredKey = do
@@ -198,7 +213,7 @@ doBuild config@Config{seeB} how artifacts = mapM demand artifacts
         Nothing -> do
           -- we have no rule; so we hope/assume we have a source
           let Key loc = requiredKey
-          checksum <- Execute (insertIntoCache Soft loc)
+          checksum <- insertIntoCache Soft loc
           pure checksum
 
         -- TODO: document this flow...
@@ -243,23 +258,25 @@ gatherDeps readKey d = loop d [] k0
 
 buildWithRule :: Config -> Action -> WitMap -> Rule -> B WitMap
 buildWithRule Config{keepSandBoxes} action depWit rule = do
-  sandbox <- NewSandbox
+  sandbox <- BNewSandbox
   let Rule{targets} = rule
   Execute (XMakeDir sandbox)
-  Execute (setupInputs sandbox depWit)
+  setupInputs sandbox depWit
   Execute (XRunActionInDir sandbox action)
-  targetWit <- Execute (cacheOutputs sandbox targets)
+  targetWit <- cacheOutputs sandbox targets
   when (not keepSandBoxes) $ Execute (XRemoveDirRecursive sandbox)
   pure targetWit
 
-setupInputs :: Loc -> WitMap -> X ()
+setupInputs :: Loc -> WitMap -> B ()
 setupInputs sandbox (WitMap m1) = do
   sequence_
-    [ XHardLink (cacheFile checksum) (sandbox </> show loc)
+    [ do
+        file <- cacheFile checksum
+        Execute (XHardLink file (sandbox </> show loc))
     | (loc,checksum) <- Map.toList m1
     ]
 
-cacheOutputs :: Loc -> [Key] -> X WitMap
+cacheOutputs :: Loc -> [Key] -> B WitMap
 cacheOutputs sandbox targets = do
   WitMap . Map.fromList <$> sequence
     [ do
@@ -271,21 +288,23 @@ cacheOutputs sandbox targets = do
 
 data InsertMode = Soft | Hard
 
-insertIntoCache :: InsertMode -> Loc -> X Checksum
+insertIntoCache :: InsertMode -> Loc -> B Checksum
 insertIntoCache mode loc = do
   let insertCommand = case mode of Soft -> XCopyFile; Hard -> XHardLink
-  checksum <- XMd5sum loc
-  let file = cacheFile checksum
-  XExists file >>= \case
+  checksum <- Execute (XMd5sum loc)
+  file <- cacheFile checksum
+  Execute (XExists file) >>= \case
     -- TODO: when the file exists, we should propogate the executable status bit in case it has changed
     True -> pure ()
-    False -> do
+    False -> Execute $ do
       insertCommand loc file
       XMakeReadOnly file
   pure checksum
 
-cacheFile :: Checksum -> Loc
-cacheFile (Checksum sum) = cachedFilesDir </> sum
+cacheFile :: Checksum -> B Loc
+cacheFile (Checksum sum) = do
+  cachedFilesDir <- cachedFilesDir
+  pure (cachedFilesDir </> sum)
 
 ----------------------------------------------------------------------
 -- Build witnesses (AKA constructive traces)
@@ -326,19 +345,23 @@ verifyWitness wks = do
         pure (Just wit)
 
 lookupWitness :: WitKeySum -> B (Maybe Witness)
-lookupWitness wks = Execute $ do
+lookupWitness wks = do
+  tracesDir <- tracesDir
   let witFile = tracesDir </> show wks
-  XExists witFile >>= \case
+  Execute (XExists witFile) >>= \case
     False -> pure Nothing
-    True -> do
+    True -> Execute $ do
       contents <- XReadFile witFile
       pure $ Just (exportWitness contents)
 
 existsCacheFile :: Checksum -> B Bool
-existsCacheFile checksum = Execute (XExists (cacheFile checksum))
+existsCacheFile checksum = do
+  file <- cacheFile checksum
+  Execute (XExists file)
 
 saveWitness :: WitKeySum -> Witness -> B ()
 saveWitness wks wit = do
+  tracesDir <- tracesDir
   let witFile = tracesDir </> show wks
   Execute $ do
     XMakeDir (dirLoc witFile)
@@ -389,17 +412,12 @@ data B a where
   BRet :: a -> B a
   BBind :: B a -> (a -> B b) -> B b
   BLog :: String -> B ()
-  NewSandbox :: B Loc
+  BCacheDir :: B Loc
+  BNewSandbox :: B Loc
   Execute :: X a -> B a
 
-runB :: Config -> B a -> IO a
-runB config b = runX config $ do
-  XMakeDir cachedFilesDir
-  XMakeDir tracesDir
-  XRemoveDirRecursive sandboxDir
-  XRemoveDirRecursive artifactsDir
-  XMakeDir sandboxDir
-  XMakeDir artifactsDir
+runB :: Loc -> Config -> B a -> IO a
+runB cacheDir config b = runX config $ do
   loop b 0 k0
   where
     k0 :: Int -> a -> X a
@@ -412,7 +430,8 @@ runB config b = runX config $ do
       BRet a -> k i a
       BBind m f -> loop m i $ \i a -> loop (f a) i k
       BLog s -> do XLog s; k i ()
-      NewSandbox -> k (i+1) (sandboxDir </> show i)
+      BCacheDir -> k i cacheDir
+      BNewSandbox -> k (i+1) (sandboxDir </> show i)
       Execute x -> do a <- x; k i a
 
 ----------------------------------------------------------------------

@@ -7,9 +7,10 @@ Add '-x -i flags for very detailed logging. Test will be fragile to any change i
 Build from clean:
 
   $ ./jenga.exe build -axi
+  I: rm -rf .jbox
+  I: rm -rf ,jenga
   I: mkdir -p .cache/files
   I: mkdir -p .cache/traces
-  I: rm -rf ,jenga
   I: mkdir -p .jbox
   I: mkdir -p ,jenga
   I: test -e .
@@ -40,11 +41,6 @@ Build from clean:
   I: test -e example/main.exe
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
-  I: mkdir -p .cache/files
-  I: mkdir -p .cache/traces
-  I: rm -rf ,jenga
-  I: mkdir -p .jbox
-  I: mkdir -p ,jenga
   X: md5sum example/fib.c
   I: test -e .cache/files/3ec221831446382d711ea3ce24237158
   I: cp example/fib.c .cache/files/3ec221831446382d711ea3ce24237158
@@ -97,9 +93,10 @@ Build from clean:
 Rebuild after no changes:
 
   $ ./jenga.exe build -axi
+  I: rm -rf .jbox
+  I: rm -rf ,jenga
   I: mkdir -p .cache/files
   I: mkdir -p .cache/traces
-  I: rm -rf ,jenga
   I: mkdir -p .jbox
   I: mkdir -p ,jenga
   I: test -e .
@@ -128,11 +125,6 @@ Rebuild after no changes:
   I: test -e example/main.exe
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
-  I: mkdir -p .cache/files
-  I: mkdir -p .cache/traces
-  I: rm -rf ,jenga
-  I: mkdir -p .jbox
-  I: mkdir -p ,jenga
   X: md5sum example/fib.c
   I: test -e .cache/files/3ec221831446382d711ea3ce24237158
   I: md5sum

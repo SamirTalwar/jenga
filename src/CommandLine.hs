@@ -8,6 +8,7 @@ data Config = Config
   , seeA :: Bool
   , seeX :: Bool
   , seeI :: Bool
+  , sharedCache :: Bool
   , keepSandBoxes :: Bool
   , materializeAll :: Bool
   , args :: [FilePath]
@@ -26,13 +27,15 @@ subCommands = hsubparser
       (progDesc "Bring a build up to date")))
 
 buildCommand :: Parser Config
-buildCommand = Config <$> e <*> b <*> a <*> x <*> i <*> k <*> m <*> args
+buildCommand = Config <$> e <*> b <*> a <*> x <*> i <*> c <*> k <*> m <*> args
   where
     e = switch (short 'e' <> help "Log steps for elaboration of targets and artifacts")
     b = switch (short 'b' <> help "Log steps for bringing a build up to date")
     a = switch (short 'a' <> help "Log execution of user build commands")
     x = switch (short 'x' <> help "Log execution of externally run commands")
     i = switch (short 'i' <> help "Log execution of internal file system access")
+    c = switch (long "shared-cache"
+                <> help "Use shared jenga cache at $HOME/.cache/jenga instead of .cache")
     k = switch (short 'k' <> long "keep-sandboxes"
                 <> help "Keep all sandboxes when build completes")
     m = switch (short 'm' <> long "materialize-all"
