@@ -20,9 +20,9 @@ Build from clean:
   $ ./jenga.exe build -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
-  A: cd ,jenga/box/0; gcc -c fib.c -o fib.o
-  A: cd ,jenga/box/1; gcc -c main.c -o main.o
-  A: cd ,jenga/box/2; gcc fib.o main.o -o main.exe
+  A: cd .jbox/0; gcc -c fib.c -o fib.o
+  A: cd .jbox/1; gcc -c main.c -o main.o
+  A: cd .jbox/2; gcc fib.o main.o -o main.exe
   ran 3 actions
 
 Rebuild after no changes:

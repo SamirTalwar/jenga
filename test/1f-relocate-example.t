@@ -7,11 +7,11 @@ Build from clean and run:
   $ ./jenga.exe build -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
-  A: cd ,jenga/box/0; gcc -c fib.c -o fib.o
-  A: cd ,jenga/box/1; gcc -c main.c -o main.o
-  A: cd ,jenga/box/2; gcc fib.o main.o -o main.exe
+  A: cd .jbox/0; gcc -c fib.c -o fib.o
+  A: cd .jbox/1; gcc -c main.c -o main.o
+  A: cd .jbox/2; gcc fib.o main.o -o main.exe
   ran 3 actions
-  $ ,jenga/artifacts/example/main.exe
+  $ ,jenga/example/main.exe
   hello, 55 world
 
 Relocate the example to a new directory - no rebuilds:
@@ -20,7 +20,7 @@ Relocate the example to a new directory - no rebuilds:
   $ ./jenga.exe build -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
-  $ ,jenga/artifacts/RELOCATED/main.exe
+  $ ,jenga/RELOCATED/main.exe
   hello, 55 world
 
 Duplicate the example directory; build in both places - double #rules, still no rebuilds:
@@ -29,7 +29,7 @@ Duplicate the example directory; build in both places - double #rules, still no 
   $ ./jenga.exe build -a
   elaborated 6 rules and 6 targets
   materalizing 2 artifacts
-  $ ,jenga/artifacts/ANOTHER/main.exe
+  $ ,jenga/ANOTHER/main.exe
   hello, 55 world
 
 Modify code in one of the example directories: minimal rebuild as required. sharing when possible:
@@ -38,10 +38,10 @@ Modify code in one of the example directories: minimal rebuild as required. shar
   $ ./jenga.exe build -a
   elaborated 6 rules and 6 targets
   materalizing 2 artifacts
-  A: cd ,jenga/box/0; gcc -c main.c -o main.o
-  A: cd ,jenga/box/1; gcc fib.o main.o -o main.exe
+  A: cd .jbox/0; gcc -c main.c -o main.o
+  A: cd .jbox/1; gcc fib.o main.o -o main.exe
   ran 2 actions
-  $ ,jenga/artifacts/RELOCATED/main.exe
+  $ ,jenga/RELOCATED/main.exe
   hello, 6765 world
-  $ ,jenga/artifacts/ANOTHER/main.exe
+  $ ,jenga/ANOTHER/main.exe
   hello, 55 world

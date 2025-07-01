@@ -7,14 +7,14 @@ Build from clean:
   $ ./jenga.exe build -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
-  A: cd ,jenga/box/0; gcc -c fib.c -o fib.o
-  A: cd ,jenga/box/1; gcc -c main.c -o main.o
-  A: cd ,jenga/box/2; gcc fib.o main.o -o main.exe
+  A: cd .jbox/0; gcc -c fib.c -o fib.o
+  A: cd .jbox/1; gcc -c main.c -o main.o
+  A: cd .jbox/2; gcc fib.o main.o -o main.exe
   ran 3 actions
 
 Run the built artifact:
 
-  $ ,jenga/artifacts/example/main.exe
+  $ ,jenga/example/main.exe
   hello, 55 world
 
 Update main.c "world->UNIVERSE":
@@ -23,10 +23,10 @@ Update main.c "world->UNIVERSE":
   $ ./jenga.exe build -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
-  A: cd ,jenga/box/0; gcc -c main.c -o main.o
-  A: cd ,jenga/box/1; gcc fib.o main.o -o main.exe
+  A: cd .jbox/0; gcc -c main.c -o main.o
+  A: cd .jbox/1; gcc fib.o main.o -o main.exe
   ran 2 actions
-  $ ,jenga/artifacts/example/main.exe
+  $ ,jenga/example/main.exe
   hello, 55 UNIVERSE
 
 Reverting to previous state of main.c causes no rebuilding:
@@ -35,7 +35,7 @@ Reverting to previous state of main.c causes no rebuilding:
   $ ./jenga.exe build -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
-  $ ,jenga/artifacts/example/main.exe
+  $ ,jenga/example/main.exe
   hello, 55 world
 
 Whitespace only change to main.c cause no link step (early cutoff):
@@ -44,7 +44,7 @@ Whitespace only change to main.c cause no link step (early cutoff):
   $ ./jenga.exe build -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
-  A: cd ,jenga/box/0; gcc -c main.c -o main.o
+  A: cd .jbox/0; gcc -c main.c -o main.o
   ran 1 action
-  $ ,jenga/artifacts/example/main.exe
+  $ ,jenga/example/main.exe
   hello, 55 world

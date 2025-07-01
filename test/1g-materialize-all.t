@@ -11,12 +11,10 @@ Materalize all targets:
 
   $ find ,jenga
   ,jenga
-  ,jenga/artifacts
-  ,jenga/artifacts/example
-  ,jenga/artifacts/example/fib.o
-  ,jenga/artifacts/example/main.exe
-  ,jenga/artifacts/example/main.o
-  ,jenga/box
+  ,jenga/example
+  ,jenga/example/fib.o
+  ,jenga/example/main.exe
+  ,jenga/example/main.o
 
 Materalize just artifacts:
 
@@ -25,7 +23,5 @@ Materalize just artifacts:
   materalizing 1 artifact
   $ find ,jenga
   ,jenga
-  ,jenga/artifacts
-  ,jenga/artifacts/example
-  ,jenga/artifacts/example/main.exe
-  ,jenga/box
+  ,jenga/example
+  ,jenga/example/main.exe

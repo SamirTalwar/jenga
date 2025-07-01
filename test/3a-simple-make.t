@@ -16,22 +16,20 @@
   $ ./jenga.exe build -a
   elaborated 4 rules and 4 targets
   materalizing 4 artifacts
-  A: cd ,jenga/box/0; grep -v '^$' defs.h.in > defs.h
-  A: cd ,jenga/box/1; gcc -c fib.c -o fib.o
-  A: cd ,jenga/box/2; gcc -c main.c -o main.o
-  A: cd ,jenga/box/3; gcc fib.o main.o -o main.exe
+  A: cd .jbox/0; grep -v '^$' defs.h.in > defs.h
+  A: cd .jbox/1; gcc -c fib.c -o fib.o
+  A: cd .jbox/2; gcc -c main.c -o main.o
+  A: cd .jbox/3; gcc fib.o main.o -o main.exe
   ran 4 actions
 
   $ find ,jenga
   ,jenga
-  ,jenga/artifacts
-  ,jenga/artifacts/example
-  ,jenga/artifacts/example/fib.o
-  ,jenga/artifacts/example/main.exe
-  ,jenga/artifacts/example/defs.h
-  ,jenga/artifacts/example/main.o
-  ,jenga/box
+  ,jenga/example
+  ,jenga/example/fib.o
+  ,jenga/example/main.exe
+  ,jenga/example/defs.h
+  ,jenga/example/main.o
 
-  $ ,jenga/artifacts/example/main.exe
+  $ ,jenga/example/main.exe
   hello, 55 world with explicit make-style rules
 

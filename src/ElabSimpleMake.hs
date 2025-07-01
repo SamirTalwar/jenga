@@ -10,6 +10,7 @@ elab config  = do
   s <- GReadKey config
   let trips = parse gram s
   -- lets define all targets of all triples to be artifacts...
+  -- TODO: discover root targets & only define then as artifacts
   let artifacts = [ key | Trip{targets} <- trips, key <- targets ]
   sequence_ [ GArtifact (makeKey key) | key <- artifacts ]
   mapM_ elabTrip trips

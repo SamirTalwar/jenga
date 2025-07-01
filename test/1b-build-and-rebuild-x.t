@@ -11,13 +11,13 @@ Build from clean:
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   X: md5sum example/fib.c
-  A: cd ,jenga/box/0; gcc -c fib.c -o fib.o
-  X: md5sum ,jenga/box/0/fib.o
+  A: cd .jbox/0; gcc -c fib.c -o fib.o
+  X: md5sum .jbox/0/fib.o
   X: md5sum example/main.c
-  A: cd ,jenga/box/1; gcc -c main.c -o main.o
-  X: md5sum ,jenga/box/1/main.o
-  A: cd ,jenga/box/2; gcc fib.o main.o -o main.exe
-  X: md5sum ,jenga/box/2/main.exe
+  A: cd .jbox/1; gcc -c main.c -o main.o
+  X: md5sum .jbox/1/main.o
+  A: cd .jbox/2; gcc fib.o main.o -o main.exe
+  X: md5sum .jbox/2/main.exe
   ran 3 actions
 
 Rebuild after no changes:

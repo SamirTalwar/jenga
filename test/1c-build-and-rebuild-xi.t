@@ -10,8 +10,8 @@ Build from clean:
   I: mkdir -p .cache/files
   I: mkdir -p .cache/traces
   I: rm -rf ,jenga
-  I: mkdir -p ,jenga/box
-  I: mkdir -p ,jenga/artifacts
+  I: mkdir -p .jbox
+  I: mkdir -p ,jenga
   I: test -e .
   I: test -d .
   I: ls .
@@ -19,12 +19,15 @@ Build from clean:
   I: test -d .cache
   I: test -d example
   I: test -d ,jenga
+  I: test -d .jbox
   I: ls example
   I: test -d example/fib.c
   I: test -d example/main.c
   I: test -d example/cc-basic.jenga
   I: test -d example/README
+  I: ls .jbox
   I: ls .
+  I: ls .jbox
   I: ls example
   X: md5sum example/cc-basic.jenga
   I: test -e .cache/files/5db0ec4f4b73e5233ab712453fcb0446
@@ -40,22 +43,22 @@ Build from clean:
   I: mkdir -p .cache/files
   I: mkdir -p .cache/traces
   I: rm -rf ,jenga
-  I: mkdir -p ,jenga/box
-  I: mkdir -p ,jenga/artifacts
+  I: mkdir -p .jbox
+  I: mkdir -p ,jenga
   X: md5sum example/fib.c
   I: test -e .cache/files/3ec221831446382d711ea3ce24237158
   I: cp example/fib.c .cache/files/3ec221831446382d711ea3ce24237158
   I: chmod a-w .cache/files/3ec221831446382d711ea3ce24237158
   I: md5sum
   I: test -e .cache/traces/347c90127bbc1461aecd80702c3c5bc4
-  I: mkdir -p ,jenga/box/0
-  I: ln .cache/files/3ec221831446382d711ea3ce24237158 ,jenga/box/0/fib.c
-  A: cd ,jenga/box/0; gcc -c fib.c -o fib.o
-  X: md5sum ,jenga/box/0/fib.o
+  I: mkdir -p .jbox/0
+  I: ln .cache/files/3ec221831446382d711ea3ce24237158 .jbox/0/fib.c
+  A: cd .jbox/0; gcc -c fib.c -o fib.o
+  X: md5sum .jbox/0/fib.o
   I: test -e .cache/files/47a0ee09b975f7501dbeb5431b76c24c
-  I: ln ,jenga/box/0/fib.o .cache/files/47a0ee09b975f7501dbeb5431b76c24c
+  I: ln .jbox/0/fib.o .cache/files/47a0ee09b975f7501dbeb5431b76c24c
   I: chmod a-w .cache/files/47a0ee09b975f7501dbeb5431b76c24c
-  I: rm -rf ,jenga/box/0
+  I: rm -rf .jbox/0
   I: mkdir -p .cache/traces
   I: cat> .cache/traces/347c90127bbc1461aecd80702c3c5bc4
   X: md5sum example/main.c
@@ -64,31 +67,31 @@ Build from clean:
   I: chmod a-w .cache/files/9d125f57501617a7e09da68a33e65d1c
   I: md5sum
   I: test -e .cache/traces/6ce82221b5bd8437a672f4e6d19a9d9e
-  I: mkdir -p ,jenga/box/1
-  I: ln .cache/files/9d125f57501617a7e09da68a33e65d1c ,jenga/box/1/main.c
-  A: cd ,jenga/box/1; gcc -c main.c -o main.o
-  X: md5sum ,jenga/box/1/main.o
+  I: mkdir -p .jbox/1
+  I: ln .cache/files/9d125f57501617a7e09da68a33e65d1c .jbox/1/main.c
+  A: cd .jbox/1; gcc -c main.c -o main.o
+  X: md5sum .jbox/1/main.o
   I: test -e .cache/files/aac22b6d9cbb6711115a1ebde2cfd6a1
-  I: ln ,jenga/box/1/main.o .cache/files/aac22b6d9cbb6711115a1ebde2cfd6a1
+  I: ln .jbox/1/main.o .cache/files/aac22b6d9cbb6711115a1ebde2cfd6a1
   I: chmod a-w .cache/files/aac22b6d9cbb6711115a1ebde2cfd6a1
-  I: rm -rf ,jenga/box/1
+  I: rm -rf .jbox/1
   I: mkdir -p .cache/traces
   I: cat> .cache/traces/6ce82221b5bd8437a672f4e6d19a9d9e
   I: md5sum
   I: test -e .cache/traces/4677478c51f6bbba384ed576c9e451ed
-  I: mkdir -p ,jenga/box/2
-  I: ln .cache/files/47a0ee09b975f7501dbeb5431b76c24c ,jenga/box/2/fib.o
-  I: ln .cache/files/aac22b6d9cbb6711115a1ebde2cfd6a1 ,jenga/box/2/main.o
-  A: cd ,jenga/box/2; gcc fib.o main.o -o main.exe
-  X: md5sum ,jenga/box/2/main.exe
+  I: mkdir -p .jbox/2
+  I: ln .cache/files/47a0ee09b975f7501dbeb5431b76c24c .jbox/2/fib.o
+  I: ln .cache/files/aac22b6d9cbb6711115a1ebde2cfd6a1 .jbox/2/main.o
+  A: cd .jbox/2; gcc fib.o main.o -o main.exe
+  X: md5sum .jbox/2/main.exe
   I: test -e .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3
-  I: ln ,jenga/box/2/main.exe .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3
+  I: ln .jbox/2/main.exe .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3
   I: chmod a-w .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3
-  I: rm -rf ,jenga/box/2
+  I: rm -rf .jbox/2
   I: mkdir -p .cache/traces
   I: cat> .cache/traces/4677478c51f6bbba384ed576c9e451ed
-  I: mkdir -p ,jenga/artifacts/example
-  I: ln .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3 ,jenga/artifacts/example/main.exe
+  I: mkdir -p ,jenga/example
+  I: ln .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3 ,jenga/example/main.exe
   ran 3 actions
 
 Rebuild after no changes:
@@ -97,8 +100,8 @@ Rebuild after no changes:
   I: mkdir -p .cache/files
   I: mkdir -p .cache/traces
   I: rm -rf ,jenga
-  I: mkdir -p ,jenga/box
-  I: mkdir -p ,jenga/artifacts
+  I: mkdir -p .jbox
+  I: mkdir -p ,jenga
   I: test -e .
   I: test -d .
   I: ls .
@@ -106,12 +109,15 @@ Rebuild after no changes:
   I: test -d .cache
   I: test -d example
   I: test -d ,jenga
+  I: test -d .jbox
   I: ls example
   I: test -d example/fib.c
   I: test -d example/main.c
   I: test -d example/cc-basic.jenga
   I: test -d example/README
+  I: ls .jbox
   I: ls .
+  I: ls .jbox
   I: ls example
   X: md5sum example/cc-basic.jenga
   I: test -e .cache/files/5db0ec4f4b73e5233ab712453fcb0446
@@ -125,8 +131,8 @@ Rebuild after no changes:
   I: mkdir -p .cache/files
   I: mkdir -p .cache/traces
   I: rm -rf ,jenga
-  I: mkdir -p ,jenga/box
-  I: mkdir -p ,jenga/artifacts
+  I: mkdir -p .jbox
+  I: mkdir -p ,jenga
   X: md5sum example/fib.c
   I: test -e .cache/files/3ec221831446382d711ea3ce24237158
   I: md5sum
@@ -143,5 +149,5 @@ Rebuild after no changes:
   I: test -e .cache/traces/4677478c51f6bbba384ed576c9e451ed
   I: cat .cache/traces/4677478c51f6bbba384ed576c9e451ed
   I: test -e .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3
-  I: mkdir -p ,jenga/artifacts/example
-  I: ln .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3 ,jenga/artifacts/example/main.exe
+  I: mkdir -p ,jenga/example
+  I: ln .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3 ,jenga/example/main.exe

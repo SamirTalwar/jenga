@@ -30,7 +30,7 @@ engineMain userProg = do
     let startingLocs = nubSort (concat xss)
     (userProg startingLocs)
 
-findStartingPointsFromTopLoc :: String -> G [Loc]
+findStartingPointsFromTopLoc :: String -> G [Loc] -- TODO: move to StdBuildUtils.hs and under user control
 findStartingPointsFromTopLoc arg = do
   let loc = Loc arg
   GExists loc >>= \case
@@ -63,7 +63,7 @@ findSubdirs loc = do
 
 elaborateAndBuild :: Config -> G () -> IO ()
 elaborateAndBuild config@Config{materializeAll} m = do
-  runB config (runElaboration config m) >>= \case
+  runB config (runElaboration config m) >>= \case -- TODO: two calls to runB ?
     Left mes -> printf "go -> Error:\n%s\n" (show mes)
     Right system -> do
       let System{artifacts,rules,how} = system
@@ -85,15 +85,15 @@ pluralize n what = printf "%d %s%s" n what (if n == 1 then "" else "s")
 ----------------------------------------------------------------------
 -- locations for cache, sandbox etc
 
+-- TODO: command line option(s) to choose cache location: local(.) or (home) ~/.cache/jenga
 jengaCache,cachedFilesDir,tracesDir :: Loc
 jengaCache = Loc ".cache"
 cachedFilesDir = jengaCache </> "files"
 tracesDir = jengaCache </> "traces"
 
-jengaDir,sandboxDir,artifactsDir :: Loc
-jengaDir = Loc ",jenga"
-sandboxDir = jengaDir </> "box"
-artifactsDir = jengaDir </> "artifacts"
+sandboxDir,artifactsDir :: Loc
+artifactsDir = Loc ",jenga"
+sandboxDir = Loc ".jbox"
 
 ----------------------------------------------------------------------
 -- Elaborate
@@ -277,6 +277,7 @@ insertIntoCache mode loc = do
   checksum <- XMd5sum loc
   let file = cacheFile checksum
   XExists file >>= \case
+    -- TODO: when the file exists, we should propogate the executable status bit in case it has changed
     True -> pure ()
     False -> do
       insertCommand loc file
@@ -395,7 +396,7 @@ runB :: Config -> B a -> IO a
 runB config b = runX config $ do
   XMakeDir cachedFilesDir
   XMakeDir tracesDir
-  XRemoveDirRecursive jengaDir
+  XRemoveDirRecursive artifactsDir
   XMakeDir sandboxDir
   XMakeDir artifactsDir
   loop b 0 k0
