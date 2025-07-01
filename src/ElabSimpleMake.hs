@@ -1,5 +1,7 @@
 module ElabSimpleMake (elab) where
 
+import Data.Set ((\\))
+import Data.Set qualified as Set
 import Interface (G(..),Rule(..),Action(..),D(..),Key(..))
 import Par4 (Position,Par,parse,position,skip,alts,many,some,sat,lit)
 import StdBuildUtils ((</>),dirKey)
@@ -9,9 +11,10 @@ elab :: Key -> G ()
 elab config  = do
   s <- GReadKey config
   let trips = parse gram s
-  -- lets define all targets of all triples to be artifacts...
-  -- TODO: discover root targets & only define then as artifacts
-  let artifacts = [ key | Trip{targets} <- trips, key <- targets ]
+  -- All targets which aren't also deps are considered to be artifcats
+  let targets = [ key | Trip{targets} <- trips, key <- targets ]
+  let deps = [ key | Trip{deps} <- trips, key <- deps ]
+  let artifacts = Set.toList (Set.fromList targets \\ Set.fromList deps)
   sequence_ [ GArtifact (makeKey key) | key <- artifacts ]
   mapM_ elabTrip trips
     where

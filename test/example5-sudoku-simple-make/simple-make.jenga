@@ -8,7 +8,7 @@
 Sudoku.hi Sudoku.o : ghc.exe Sudoku.hs
  ./ghc.exe -c Sudoku.hs -XLambdaCase
 
-main.hi main.o : ghc.exe main.hs Sudoku.hi
+main.o : ghc.exe main.hs Sudoku.hi
  ./ghc.exe -c main.hs
 
 
