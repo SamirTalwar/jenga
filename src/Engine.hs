@@ -396,6 +396,7 @@ runB :: Config -> B a -> IO a
 runB config b = runX config $ do
   XMakeDir cachedFilesDir
   XMakeDir tracesDir
+  XRemoveDirRecursive sandboxDir
   XRemoveDirRecursive artifactsDir
   XMakeDir sandboxDir
   XMakeDir artifactsDir
