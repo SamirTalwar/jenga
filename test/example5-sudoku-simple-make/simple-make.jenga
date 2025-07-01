@@ -18,13 +18,16 @@ solver.exe : ghc.exe main.o Sudoku.o
   ./ghc.exe main.o Sudoku.o -package containers -o solver.exe
 
 
-# Run the executable
+# Choose a ghc binary and create a dispatcher script
 
-wheel.solution : wheel.puzzle solver.exe
-  ./solver.exe wheel.puzzle | tee wheel.solution
+latest-version :
+  find $HOME/.stack | grep lib/.*/bin/ghc$ | rev | cut -d/ -f3 | rev | cut -d- -f2 | sort -n | tail -1 > latest-version
 
+version : latest-version
+  cp latest-version version
 
-# Find the most recent ghc binary installed in ~/.stack and create a dispatcher script
+ghc-path : version
+  find $HOME/.stack | grep lib/.*/bin/ghc$ | grep $(cat version) > ghc-path
 
-ghc.exe :
-  echo exec $(find $HOME/.stack | grep lib/.*/bin/ghc$ | sort -n | tail -1) '"$@"' > ghc.exe ; chmod +x ghc.exe
+ghc.exe : ghc-path
+  echo exec $(cat ghc-path) '"$@"' > ghc.exe; chmod +x ghc.exe
