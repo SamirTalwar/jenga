@@ -1,0 +1,33 @@
+
+# Extend example7, but now we have an include chain: main.c -> defs.h -> defs2.h
+
+# Compile C; using scanner dependencies "@"
+
+main.o : @main.d
+  gcc -c main.c -o main.o
+
+fib.o : @fib.d
+  gcc -c fib.c -o fib.o
+
+
+# Deps generation... fib.d as before. main.d needs more work!
+
+fib.d : fib.c
+  gcc -MG -MM fib.c > fib.d
+
+# Because of 2-step include, we need 2-step "-MM" to automate dicovery
+# In general this should repeat to a fixed point.
+# And would be best coded in haskell directly against the jenga build rule interface
+# But the following hand crafted rules for main give the idea.
+
+main.d : @main.d2
+  gcc -MG -MM main.c > main.d
+
+main.d2 : main.c
+  (echo -n 'main.d '; gcc -MG -MM main.c) > main.d2
+
+
+# Link...
+
+main.exe : fib.o main.o
+  gcc fib.o main.o -o main.exe
