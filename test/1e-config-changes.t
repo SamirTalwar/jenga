@@ -14,9 +14,9 @@ Build from clean and run:
   $ ,jenga/example/main.exe
   hello, 55 world
 
-Update config file to link executable with a different name:
+Update build rules to link executable under a different name:
 
-  $ echo 'CC_basic(RENAMED.exe)' > example/make.jenga
+  $ sed -i 's/main.exe/RENAMED.exe/' example/make.jenga
   $ ./jenga.exe build --local-cache -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact

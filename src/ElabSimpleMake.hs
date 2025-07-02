@@ -3,7 +3,7 @@ module ElabSimpleMake (elab) where
 import Data.List.Split (splitOn)
 import Data.Set ((\\))
 import Data.Set qualified as Set
-import ElabC qualified (macroC,macroC_basic)
+import ElabC qualified (macroC)
 import Interface (G(..),Rule(..),Action(..),D(..),Key(..))
 import Par4 (Position,Par,parse,position,skip,alts,many,some,sat,lit)
 import StdBuildUtils ((</>),dirKey)
@@ -12,7 +12,6 @@ import Text.Printf (printf)
 dispatch :: String -> Key -> G()
 dispatch = \case
   "CC" -> ElabC.macroC
-  "CC_basic" -> ElabC.macroC_basic -- TODO: remove
   name -> error (printf "unknown macro name: %s" name)
 
 elab :: Key -> G ()

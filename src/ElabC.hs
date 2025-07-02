@@ -1,4 +1,4 @@
-module ElabC (macroC,macroC_basic) where
+module ElabC (macroC) where
 
 import Interface (G(..),Rule(..),Action(..),D(..),Key(..),Loc)
 import StdBuildUtils (dirKey,listBaseNamesWithSuffix,mkKey,baseKeys,baseKey,(</>))
@@ -8,13 +8,6 @@ macroC :: Key -> G ()
 macroC exe = do
   xs <- listBaseNamesWithSuffix (dirKey exe) ".c"
   mapM_ setupCruleWithDeps xs
-  setupLinkRule exe xs
-  GArtifact exe
-
-macroC_basic :: Key -> G () -- TODO: remove
-macroC_basic exe = do
-  xs <- listBaseNamesWithSuffix (dirKey exe) ".c"
-  mapM_ setupCruleBasic xs
   setupLinkRule exe xs
   GArtifact exe
 
@@ -29,12 +22,6 @@ setupLinkRule exe xs =
         mapM_ DNeed obs
         pure $ Bash (printf "gcc %s -o %s" (baseKeys obs) (baseKey exe))
     }
-
-setupCruleBasic :: Loc -> G ()
-setupCruleBasic x = do
-  let c = mkKey x ".c"
-  let o = mkKey x ".o"
-  GRule $ ccCompileRule o c (DNeed c)
 
 setupCruleWithDeps :: Loc -> G ()
 setupCruleWithDeps x = do
