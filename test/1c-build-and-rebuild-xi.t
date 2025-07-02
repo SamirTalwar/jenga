@@ -30,13 +30,12 @@ Build from clean:
   I: ls .jbox
   I: ls example
   X: md5sum example/make.jenga
-  I: test -e .cache/files/64c8b0e59a5ad98d053a0c77bc88e1f2
-  I: cp example/make.jenga .cache/files/64c8b0e59a5ad98d053a0c77bc88e1f2
-  I: chmod a-w .cache/files/64c8b0e59a5ad98d053a0c77bc88e1f2
+  I: test -e .cache/files/ade02a5a8e9b16d13646fc43aa2e61ca
+  I: cp example/make.jenga .cache/files/ade02a5a8e9b16d13646fc43aa2e61ca
+  I: chmod a-w .cache/files/ade02a5a8e9b16d13646fc43aa2e61ca
   I: cat example/make.jenga
-  I: ls example
-  I: test -e example/fib.o
   I: test -e example/main.o
+  I: test -e example/fib.o
   I: test -e example/main.exe
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
@@ -115,11 +114,10 @@ Rebuild after no changes:
   I: ls .jbox
   I: ls example
   X: md5sum example/make.jenga
-  I: test -e .cache/files/64c8b0e59a5ad98d053a0c77bc88e1f2
+  I: test -e .cache/files/ade02a5a8e9b16d13646fc43aa2e61ca
   I: cat example/make.jenga
-  I: ls example
-  I: test -e example/fib.o
   I: test -e example/main.o
+  I: test -e example/fib.o
   I: test -e example/main.exe
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
