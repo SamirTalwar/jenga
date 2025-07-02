@@ -215,9 +215,7 @@ doBuild config@Config{seeB} how artifacts = mapM demand artifacts
         Just sum -> pure sum
         Nothing -> do
           sum <- demand1 sought
-          -- TODO: better to memoize all targets from the same rule
-          -- would need to return the WitMap from the recursion
-          BSetKey sought sum
+          BSetKey sought sum -- test/example6 fails if this line is removed
           pure sum
 
     demand1 :: Key -> B Checksum

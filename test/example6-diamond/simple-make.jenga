@@ -1,0 +1,20 @@
+
+# Diamond shaped deps.
+
+a :
+ echo -n A > a
+
+b :
+ echo -n B  > b
+
+c :
+ echo -n C > c
+
+ab : a b
+ cat a b > ab
+
+bc : b c
+ cat b c > bc
+
+top : ab bc
+  cat ab bc > top
