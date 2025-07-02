@@ -1,0 +1,39 @@
+
+# Diamond example in haskell. A is a leaf, used by B and C; B and C used by Top
+# In this version we write rules with explicit deps
+
+
+# Generate main code; compile it and link everything
+
+diamond.exe : ghc.exe main.o Top.o B.o C.o A.o
+ ./ghc.exe -o diamond.exe main.o Top.o B.o C.o A.o
+
+main.o : ghc.exe main.hs Top.hi
+  ./ghc.exe -c main.hs
+
+main.hs :
+  echo 'import Top' > main.hs
+
+
+# Compilation rules for haskell modules (A,B,C,Top)
+
+A.hi A.o : ghc.exe A.hs
+  ./ghc.exe -c A.hs
+
+B.hi B.o : ghc.exe B.hs A.hi
+  ./ghc.exe -c B.hs
+
+C.hi C.o : ghc.exe C.hs A.hi
+  ./ghc.exe -c C.hs
+
+Top.hi Top.o : ghc.exe Top.hs B.hi C.hi
+  ./ghc.exe -c Top.hs
+
+
+# ghc.exe
+
+ghc.exe : ghc-path
+  echo exec $(cat ghc-path) '"$@"' > ghc.exe ; chmod +x ghc.exe
+
+ghc-path :
+  find $HOME/.stack | grep -v lib | grep bin/ghc$ | sort -n | tail -1 > ghc-path

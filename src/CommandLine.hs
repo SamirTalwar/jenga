@@ -26,6 +26,7 @@ subCommands = hsubparser
     (info buildCommand
       (progDesc "Bring a build up to date")))
 
+-- TODO: allow multiple setting of flags: -a -a
 buildCommand :: Parser Config
 buildCommand = Config <$> e <*> b <*> a <*> x <*> i <*> c <*> k <*> m <*> args
   where
