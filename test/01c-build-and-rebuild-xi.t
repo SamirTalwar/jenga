@@ -78,14 +78,14 @@ Build from clean:
   I: ln .cache/files/aac22b6d9cbb6711115a1ebde2cfd6a1 .jbox/2/main.o
   A: cd .jbox/2; gcc fib.o main.o -o main.exe
   X: md5sum .jbox/2/main.exe
-  I: test -e .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3
-  I: ln .jbox/2/main.exe .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3
-  I: chmod a-w .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3
+  I: test -e .cache/files/9efc05831ccef0c24b2697d8fff2acee
+  I: ln .jbox/2/main.exe .cache/files/9efc05831ccef0c24b2697d8fff2acee
+  I: chmod a-w .cache/files/9efc05831ccef0c24b2697d8fff2acee
   I: rm -rf .jbox/2
   I: mkdir -p .cache/traces
   I: cat> .cache/traces/4677478c51f6bbba384ed576c9e451ed
   I: mkdir -p ,jenga/example
-  I: ln .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3 ,jenga/example/main.exe
+  I: ln .cache/files/9efc05831ccef0c24b2697d8fff2acee ,jenga/example/main.exe
   ran 3 actions
 
 Rebuild after no changes:
@@ -136,6 +136,6 @@ Rebuild after no changes:
   I: md5sum
   I: test -e .cache/traces/4677478c51f6bbba384ed576c9e451ed
   I: cat .cache/traces/4677478c51f6bbba384ed576c9e451ed
-  I: test -e .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3
+  I: test -e .cache/files/9efc05831ccef0c24b2697d8fff2acee
   I: mkdir -p ,jenga/example
-  I: ln .cache/files/1c3e3753bbd078e9beb1a9eeb08efdd3 ,jenga/example/main.exe
+  I: ln .cache/files/9efc05831ccef0c24b2697d8fff2acee ,jenga/example/main.exe
