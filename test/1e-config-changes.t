@@ -16,15 +16,19 @@ Build from clean and run:
 
 Update config file to link executable with a different name:
 
-  $ echo RENAMED.exe > example/cc-basic.jenga
+  $ echo 'CC_basic(RENAMED.exe)' > example/make.jenga
   $ ./jenga.exe build --local-cache -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   A: cd .jbox/0; gcc fib.o main.o -o RENAMED.exe
   ran 1 action
+
+Check we cannot find the executable by its old name:
   $ ,jenga/example/main.exe
   /bin/sh: 14: ,jenga/example/main.exe: not found
   [127]
+
+But only via its new name:
   $ ,jenga/example/RENAMED.exe
   hello, 55 world
 

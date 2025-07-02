@@ -24,17 +24,16 @@ Build from clean:
   I: ls example
   I: test -d example/fib.c
   I: test -d example/main.c
-  I: test -d example/cc-basic.jenga
-  I: test -d example/README
+  I: test -d example/make.jenga
   I: ls .jbox
   I: ls .
   I: ls .jbox
   I: ls example
-  X: md5sum example/cc-basic.jenga
-  I: test -e .cache/files/5db0ec4f4b73e5233ab712453fcb0446
-  I: cp example/cc-basic.jenga .cache/files/5db0ec4f4b73e5233ab712453fcb0446
-  I: chmod a-w .cache/files/5db0ec4f4b73e5233ab712453fcb0446
-  I: cat example/cc-basic.jenga
+  X: md5sum example/make.jenga
+  I: test -e .cache/files/64c8b0e59a5ad98d053a0c77bc88e1f2
+  I: cp example/make.jenga .cache/files/64c8b0e59a5ad98d053a0c77bc88e1f2
+  I: chmod a-w .cache/files/64c8b0e59a5ad98d053a0c77bc88e1f2
+  I: cat example/make.jenga
   I: ls example
   I: test -e example/fib.o
   I: test -e example/main.o
@@ -110,15 +109,14 @@ Rebuild after no changes:
   I: ls example
   I: test -d example/fib.c
   I: test -d example/main.c
-  I: test -d example/cc-basic.jenga
-  I: test -d example/README
+  I: test -d example/make.jenga
   I: ls .jbox
   I: ls .
   I: ls .jbox
   I: ls example
-  X: md5sum example/cc-basic.jenga
-  I: test -e .cache/files/5db0ec4f4b73e5233ab712453fcb0446
-  I: cat example/cc-basic.jenga
+  X: md5sum example/make.jenga
+  I: test -e .cache/files/64c8b0e59a5ad98d053a0c77bc88e1f2
+  I: cat example/make.jenga
   I: ls example
   I: test -e example/fib.o
   I: test -e example/main.o

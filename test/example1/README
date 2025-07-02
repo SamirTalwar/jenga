@@ -1,4 +1,0 @@
-This is an example with two .c files used to drive early development of jenga2.
-In particular to get the correct sandboxing behaviour.
-The example uses simple rule generation for C build and link. No dependency discovery.
-An optional config file is consulted to name the generated executable file.

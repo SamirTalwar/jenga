@@ -1,5 +1,8 @@
 
-# The cc.config takes care of standard rules for C compilation and link.
+# Standard rules for C compilation and link.
+
+CC( main.exe )
+
 # But we can add adhoc extra stuff here.
 
 defs.h : defs.h.in

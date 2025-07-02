@@ -10,17 +10,16 @@
   ./example/fib.c
   ./example/main.c
   ./example/fib.h
-  ./example/cc.jenga
   ./example/README
   ./example/simple-make.jenga
 
   $ ./jenga.exe build --local-cache -a
   elaborated 6 rules and 6 targets
   materalizing 2 artifacts
-  A: cd .jbox/0; grep -v '^$' defs.h.in > defs.h
-  A: cd .jbox/1; gcc -MG -MM fib.c -MF fib.d
-  A: cd .jbox/2; gcc -c fib.c -o fib.o
-  A: cd .jbox/3; gcc -MG -MM main.c -MF main.d
+  A: cd .jbox/0; gcc -MG -MM fib.c -MF fib.d
+  A: cd .jbox/1; gcc -c fib.c -o fib.o
+  A: cd .jbox/2; gcc -MG -MM main.c -MF main.d
+  A: cd .jbox/3; grep -v '^$' defs.h.in > defs.h
   A: cd .jbox/4; gcc -c main.c -o main.o
   A: cd .jbox/5; gcc fib.o main.o -o main.exe
   ran 6 actions

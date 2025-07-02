@@ -1,30 +1,12 @@
 module StdBuildUtils
   ( listBaseNamesWithSuffix
-  , parseSingleName
   , mkKey, baseKey, baseKeys, dirKey
   , (</>), dirLoc
   ) where
 
-import Data.Char qualified as Char
 import Data.List (intercalate)
 import Interface (G(..),Key(..),Loc(..))
 import System.FilePath qualified as FP
-import Text.Printf (printf)
-
-parseSingleName :: Key -> String -> G Loc
-parseSingleName key str =
-  case lines str of
-    [] -> GFail $ printf "parseSingleName(%s): no lines" (show key)
-    _:_:_ -> GFail $ printf "parseSingleName(%s): unexpected multiple lines" (show key)
-    [line] ->
-      if any badChar line
-      then GFail (printf "parseSingleName(%s): Bad name: '%s'" (show key) line)
-      else do
-        let dir = dirKey key
-        pure (dir </> line)
-      where
-        badChar c = c == '/' || n < 33 || n > 126
-          where n = Char.ord c
 
 listBaseNamesWithSuffix :: Loc -> String -> G [Loc]
 listBaseNamesWithSuffix dir sought = do

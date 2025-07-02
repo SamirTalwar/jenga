@@ -12,8 +12,7 @@ What have I got?
   ./example
   ./example/fib.c
   ./example/main.c
-  ./example/cc-basic.jenga
-  ./example/README
+  ./example/make.jenga
 
 Build from clean:
 

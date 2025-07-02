@@ -1,22 +1,22 @@
-module ElabC (elab,elabBasic) where
+module ElabC (macroC,macroC_basic) where
 
-import Text.Printf (printf)
 import Interface (G(..),Rule(..),Action(..),D(..),Key(..),Loc)
-import StdBuildUtils (parseSingleName,dirKey,listBaseNamesWithSuffix,mkKey,baseKeys,baseKey,(</>))
+import StdBuildUtils (dirKey,listBaseNamesWithSuffix,mkKey,baseKeys,baseKey,(</>))
+import Text.Printf (printf)
 
-elab,elabBasic :: Key -> G ()
+macroC :: Key -> G ()
+macroC exe = do
+  xs <- listBaseNamesWithSuffix (dirKey exe) ".c"
+  mapM_ setupCruleWithDeps xs
+  setupLinkRule exe xs
+  GArtifact exe
 
-elab = elabG setupCruleWithDeps
-elabBasic = elabG setupCruleBasic
-
-elabG :: (Loc -> G ()) -> Key -> G ()
-elabG setupCC config = do
-  configContents <- GReadKey config
-  main <- Key <$> parseSingleName config configContents
-  xs <- listBaseNamesWithSuffix (dirKey config) ".c"
-  mapM_ setupCC xs
-  setupLinkRule main xs
-  GArtifact main
+macroC_basic :: Key -> G () -- TODO: remove
+macroC_basic exe = do
+  xs <- listBaseNamesWithSuffix (dirKey exe) ".c"
+  mapM_ setupCruleBasic xs
+  setupLinkRule exe xs
+  GArtifact exe
 
 setupLinkRule :: Key -> [Loc] -> G ()
 setupLinkRule exe xs =

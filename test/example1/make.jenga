@@ -1,0 +1,11 @@
+
+# This is an example with two .c files used to drive early development of jenga2.
+# In particular to get the correct sandboxing behaviour.
+# The example uses simple rule generation for C build and link. No dependency discovery.
+
+# This example is used by tests 1a..1g
+
+CC_basic( main.exe )
+
+# TODO: As a first example, it might be better to avoid the built-in CC rule gen.
+# And instead hand-code the rules explicitly.
