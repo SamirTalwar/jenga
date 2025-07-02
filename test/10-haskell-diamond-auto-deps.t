@@ -1,6 +1,6 @@
 
   $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
-  $ cp -rp $TESTDIR/example10-haskell-diamond-auto-deps example
+  $ cp -rp $TESTDIR/example-10-haskell-diamond-auto-deps example
 
   $ ./jenga.exe build --local-cache -a
   elaborated 10 rules and 15 targets

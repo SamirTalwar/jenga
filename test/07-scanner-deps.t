@@ -1,6 +1,6 @@
 
   $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
-  $ cp -rp $TESTDIR/example7-scanner-deps example
+  $ cp -rp $TESTDIR/example-07-scanner-deps example
 
 Initial build
   $ ./jenga.exe build --local-cache -am

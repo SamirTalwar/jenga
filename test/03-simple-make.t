@@ -1,6 +1,6 @@
 
   $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
-  $ cp -rp $TESTDIR/example3-simple-make example
+  $ cp -rp $TESTDIR/example-03-simple-make example
 
   $ find .
   .

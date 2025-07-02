@@ -2,7 +2,7 @@
 Get me a jenga executable and the source code for the first example...
 
   $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
-  $ cp -rp $TESTDIR/example2-discover-deps example
+  $ cp -rp $TESTDIR/example-02-discover-deps example
 
 Build from clean:
   $ ./jenga.exe build --local-cache -a

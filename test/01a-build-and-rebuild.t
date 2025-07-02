@@ -2,7 +2,7 @@
 Get me a jenga executable and the source code for the first example...
 
   $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
-  $ cp -rp $TESTDIR/example1 example
+  $ cp -rp $TESTDIR/example-01-two-files example
 
 What have I got?
 

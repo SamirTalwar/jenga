@@ -1,6 +1,6 @@
 
   $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
-  $ cp -rp $TESTDIR/example5-sudoku-simple-make example
+  $ cp -rp $TESTDIR/example-05-sudoku example
 
   $ ./jenga.exe build --local-cache -a
   elaborated 7 rules and 8 targets
