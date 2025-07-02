@@ -11,7 +11,7 @@
   ./example/main.c
   ./example/fib.h
   ./example/README
-  ./example/simple-make.jenga
+  ./example/make.jenga
 
   $ ./jenga.exe build --local-cache -a
   elaborated 4 rules and 4 targets
