@@ -1,0 +1,9 @@
+
+# Example with optional dependency -- "?CFLAGS"
+# CFLAGS is allowed to be source or build by a rule
+
+main.exe : main.o
+  gcc -o main.exe main.o
+
+main.o : main.c ?CFLAGS
+  gcc -c $(test -f CFLAGS && cat CFLAGS) main.c

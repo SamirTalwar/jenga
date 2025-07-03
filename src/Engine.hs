@@ -15,7 +15,8 @@ import StdBuildUtils ((</>),dirLoc)
 import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirectory,removePathForcibly,copyFile,getHomeDirectory)
 import System.FilePath qualified as FP
 import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode,getFileStatus,isDirectory)
-import System.Process (callCommand,shell,readCreateProcess)
+import System.Process (shell,readCreateProcess,readCreateProcessWithExitCode)
+import System.Exit(ExitCode(..))
 import Text.Printf (printf)
 
 ----------------------------------------------------------------------
@@ -145,7 +146,7 @@ runElaboration config@Config{seeE} m = loop m system0 k0
       GRule rule -> do
         let Rule{targets} = rule
         logE $ printf "Elaborate rule: %s" (show rule)
-        xs <- sequence [ do b <- Execute (XExists loc); pure (key,b)
+        xs <- sequence [ do b <- Execute (XFileExists loc); pure (key,b)
                         | key@(Key loc) <- targets ]
         case [ key | (key,isSource) <- xs, isSource ] of
           clashS@(_:_) -> do
@@ -169,7 +170,7 @@ runElaboration config@Config{seeE} m = loop m system0 k0
         locs <- Execute (XGlob dir)
         k system locs
       GExists loc -> do
-        bool <- Execute (XExists loc)
+        bool <- Execute (XFileExists loc)
         k system bool
       GIsDirectory loc -> do
         bool <- Execute (XIsdirectory loc)
@@ -202,6 +203,14 @@ doBuild config@Config{seeB} how artifacts = mapM demand artifacts
     log :: String -> B ()
     log mes = when seeB $ BLog (printf "B: %s" mes)
 
+    existsKey :: Key -> B Bool
+    existsKey key =
+      if Map.member key how
+      then pure True
+      else do
+        let Key loc = key
+        Execute (XFileExists loc)
+
     readKey :: Key -> B String
     readKey key = do
       checksum <- demand key
@@ -223,16 +232,19 @@ doBuild config@Config{seeB} how artifacts = mapM demand artifacts
       log $ printf "Require: %s" (show sought)
       case Map.lookup sought how of
         Nothing -> do
-          -- we have no rule; so we hope/assume we have a source
           let Key loc = sought
-          checksum <- insertIntoCache Soft loc
-          pure checksum
+          Execute (XFileExists loc) >>= \case
+            False -> do
+              error (printf "'%s' is not source and has no build rule" (show sought))
+            True -> do
+              checksum <- insertIntoCache Soft loc
+              pure checksum
 
         -- TODO: document this flow...
         Just rule -> do
           log $ printf "Consult: %s" (show rule)
           let Rule{depcom} = rule
-          (deps,action) <- gatherDeps readKey depcom
+          (deps,action) <- gatherDeps existsKey readKey depcom
 
           wdeps <- (WitMap . Map.fromList) <$>
             sequence [ do checksum <- demand dep; pure (locateKey dep,checksum)
@@ -254,8 +266,8 @@ doBuild config@Config{seeB} how artifacts = mapM demand artifacts
               let checksum = lookWitMap (locateKey sought) wtargets
               pure checksum
 
-gatherDeps :: (Key -> B String) -> D a -> B ([Key],a)
-gatherDeps readKey d = loop d [] k0
+gatherDeps :: (Key -> B Bool) -> (Key -> B String) -> D a -> B ([Key],a)
+gatherDeps existsKey readKey d = loop d [] k0
   where
     k0 xs a = pure (reverse xs,a) -- TODO: sort deps?
     loop :: D a -> [Key] -> ([Key] -> a -> B ([Key],b)) -> B ([Key], b)
@@ -269,6 +281,10 @@ gatherDeps readKey d = loop d [] k0
       DReadKey key -> do
         contents <- readKey key
         k xs contents
+      DExistsKey key -> do
+        b <- existsKey key
+        --Execute (XLog (printf "exists: %s -> %s" (show key) (show b)))
+        k xs b
 
 buildWithRule :: Config -> Action -> WitMap -> Rule -> B WitMap
 buildWithRule Config{keepSandBoxes} action depWit rule = do
@@ -276,11 +292,13 @@ buildWithRule Config{keepSandBoxes} action depWit rule = do
   let Rule{targets} = rule
   Execute (XMakeDir sandbox)
   setupInputs sandbox depWit
-  Execute (XRunActionInDir sandbox action)
-  -- TODO: detect failure in user command and do not cache
-  targetWit <- cacheOutputs sandbox targets
-  when (not keepSandBoxes) $ Execute (XRemoveDirRecursive sandbox)
-  pure targetWit
+  Execute (XRunActionInDir sandbox action) >>= \case
+    False ->
+      error (printf "user action failed for rule: '%s'" (show rule))
+    True -> do
+      targetWit <- cacheOutputs sandbox targets
+      when (not keepSandBoxes) $ Execute (XRemoveDirRecursive sandbox)
+      pure targetWit
 
 setupInputs :: Loc -> WitMap -> B ()
 setupInputs sandbox (WitMap m1) = do
@@ -295,9 +313,14 @@ cacheOutputs :: Loc -> [Key] -> B WitMap
 cacheOutputs sandbox targets = do
   WitMap . Map.fromList <$> sequence
     [ do
-        let loc = locateKey target
-        checksum <- insertIntoCache Hard (sandbox </> show loc)
-        pure (loc,checksum)
+        let tag = locateKey target
+        let sandboxLoc = sandbox </> show tag
+        Execute (XFileExists sandboxLoc) >>= \case
+          False -> do
+            error (printf "rule failed to produced declared target '%s'" (show target))
+          True -> do
+            checksum <- insertIntoCache Hard sandboxLoc
+            pure (tag,checksum)
     | target <- targets
     ]
 
@@ -308,7 +331,7 @@ insertIntoCache mode loc = do
   let insertCommand = case mode of Soft -> XCopyFile; Hard -> XHardLink
   checksum <- Execute (XMd5sum loc)
   file <- cacheFile checksum
-  Execute (XExists file) >>= \case
+  Execute (XFileExists file) >>= \case
     -- TODO: when the file exists, we should propogate the executable status bit in case it has changed
     True -> pure ()
     False -> Execute $ do
@@ -367,7 +390,7 @@ lookupWitness :: WitKeySum -> B (Maybe Witness)
 lookupWitness wks = do
   tracesDir <- tracesDir
   let witFile = tracesDir </> show wks
-  Execute (XExists witFile) >>= \case
+  Execute (XFileExists witFile) >>= \case
     False -> pure Nothing
     True -> Execute $ do
       contents <- XReadFile witFile
@@ -376,7 +399,7 @@ lookupWitness wks = do
 existsCacheFile :: Checksum -> B Bool
 existsCacheFile checksum = do
   file <- cacheFile checksum
-  Execute (XExists file)
+  Execute (XFileExists file)
 
 saveWitness :: WitKeySum -> Witness -> B ()
 saveWitness wks wit = do
@@ -482,13 +505,13 @@ data X a where
   XBind :: X a -> (a -> X b) -> X b
   XLog :: String -> X ()
 
-  XRunActionInDir :: Loc -> Action -> X ()
+  XRunActionInDir :: Loc -> Action -> X Bool
   XMd5sum :: Loc -> X Checksum
 
   XHash :: String -> X Checksum
   XMakeDir :: Loc -> X ()
   XGlob :: Loc -> X [Loc]
-  XExists :: Loc -> X Bool
+  XFileExists :: Loc -> X Bool
   XIsdirectory :: Loc -> X Bool
   XCopyFile :: Loc -> Loc -> X ()
   XMakeReadOnly :: Loc -> X ()
@@ -516,7 +539,14 @@ runX Config{seeA,seeX,seeI} = loop
       XRunActionInDir (Loc dir) action -> do
         let (Bash command) = action
         logA $ printf "cd %s; %s" dir command
-        withCurrentDirectory dir (callCommand command)
+        (exitCode,stdout,stderr) <-
+          withCurrentDirectory dir (readCreateProcessWithExitCode (shell command) "")
+        -- TODO: better management & report of stdout/stderr
+        putStr stdout
+        putStr stderr
+        let ok = case exitCode of ExitSuccess -> True; ExitFailure{} -> False
+        --logA $ printf "cd %s; %s --> %s" dir command (show ok)
+        pure ok
 
       -- other commands with shell out to external process
       XMd5sum (Loc fp) -> do
@@ -526,7 +556,7 @@ runX Config{seeA,seeX,seeI} = loop
         let sum = case (splitOn " " output) of [] -> undefined; x:_ -> x
         pure (Checksum sum)
 
-      -- internal file system access (log equivalent external command)
+      -- internal file system access (log approx equivalent external command)
       XHash contents -> do
         logI $ printf "md5sum"
         let sum = MD5.md5s (MD5.Str contents)
@@ -539,7 +569,7 @@ runX Config{seeA,seeX,seeI} = loop
         xs <- listDirectory fp
         -- logI $ printf "ls %s --> %s" fp (show xs)
         pure [ Loc fp </> x | x <- xs ]
-      XExists (Loc fp) -> do
+      XFileExists (Loc fp) -> do
         logI $ printf "test -e %s" fp
         fileExist fp
       XIsdirectory (Loc fp) -> do

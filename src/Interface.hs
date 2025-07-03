@@ -43,6 +43,7 @@ data D a where
   DLog :: String -> D ()
   DNeed :: Key -> D ()
   DReadKey :: Key -> D String
+  DExistsKey :: Key -> D Bool
 
 data Key = Key Loc deriving (Eq,Ord)
 

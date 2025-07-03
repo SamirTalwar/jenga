@@ -76,6 +76,7 @@ Add '-xi flags for very detailed logging. Test will be fragile to any change in 
   I: ls .
   I: ls .jbox
   I: ls example
+  I: test -e example/build.jenga
   X: md5sum example/build.jenga
   I: test -e .cache/files/ade02a5a8e9b16d13646fc43aa2e61ca
   I: cat example/build.jenga
@@ -84,12 +85,14 @@ Add '-xi flags for very detailed logging. Test will be fragile to any change in 
   I: test -e example/main.exe
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
+  I: test -e example/fib.c
   X: md5sum example/fib.c
   I: test -e .cache/files/3ec221831446382d711ea3ce24237158
   I: md5sum
   I: test -e .cache/traces/347c90127bbc1461aecd80702c3c5bc4
   I: cat .cache/traces/347c90127bbc1461aecd80702c3c5bc4
   I: test -e .cache/files/47a0ee09b975f7501dbeb5431b76c24c
+  I: test -e example/main.c
   X: md5sum example/main.c
   I: test -e .cache/files/9d125f57501617a7e09da68a33e65d1c
   I: md5sum

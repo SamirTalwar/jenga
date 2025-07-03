@@ -1,4 +1,4 @@
-module ElabSimpleMake (elab) where
+module ElabSimpleMake (elab) where -- TODO: rename loose prefix "Elab" -- add banner comment
 
 import Data.List.Split (splitOn)
 import Data.Set ((\\))
@@ -39,12 +39,16 @@ elab config  = do
           }
 
       makeDep targets = \case
-        Dep file -> DNeed (makeKey file)
-        Scanner file -> do
+        DepPlain file -> DNeed (makeKey file)
+        DepScanner file -> do
           let key = makeKey file
           contents <- DReadKey key
           let deps = filterDepsFor targets contents
           sequence_ [ DNeed (makeKey dep) | dep <- deps ]
+        DepOpt file -> do
+          let key = makeKey file
+          b <- DExistsKey key
+          if b then DNeed key else pure ()
 
       makeKey :: String -> Key
       makeKey basename = Key (dirKey config </> basename)
@@ -55,7 +59,7 @@ selectArtifacts clauses = do
   -- Only considering clauses which define rule-triples...
   -- Any target which isn't a deps is considered an artifcat
   let targets = [ key | ClauseTrip (Trip{targets}) <- clauses, key <- targets ]
-  let deps = [ case dep of Dep k -> k; Scanner k -> k
+  let deps = [ keyOfDep dep
              | ClauseTrip (Trip{deps}) <- clauses, dep <- deps ]
   Set.toList (Set.fromList targets \\ Set.fromList deps)
 
@@ -89,7 +93,13 @@ data Trip = Trip
   , action :: String
   }
 
-data Dep = Dep String | Scanner String
+data Dep
+  = DepPlain String     -- key
+  | DepScanner String   -- @key
+  | DepOpt String       -- ?key
+
+keyOfDep :: Dep -> String
+keyOfDep = \case DepPlain k -> k; DepScanner k -> k; DepOpt k -> k
 
 
 -- grammar for traditional "make-style" triples, spread over two lines.
@@ -134,8 +144,9 @@ gram = start
       pure (ClauseTrip (Trip {pos,targets,deps,action}))
 
     dep = do
-      alts [ do lit '@'; x <- identifier; pure (Scanner x)
-           , Dep <$> identifier ]
+      alts [ do lit '@'; x <- identifier; pure (DepScanner x)
+           , do lit '?'; x <- identifier; pure (DepOpt x)
+           , DepPlain <$> identifier ]
 
     identifier = do
       res <- some identifierChar
