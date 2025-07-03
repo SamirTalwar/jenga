@@ -15,7 +15,7 @@ data Config = Config
   , mode :: Mode
   } deriving Show
 
-data Mode = ModeBuild | ModeListTargets deriving Show
+data Mode = ModeBuild | ModeListTargets | ModeListRules deriving Show
 
 exec :: IO Config
 exec = customExecParser
@@ -48,7 +48,14 @@ buildCommand = Config <$> e <*> b <*> a <*> x <*> i <*> c <*> k <*> m <*> args <
                               <> help "directories containing build rules"))
 
     mode =
-      (\b -> if b then ModeListTargets else ModeBuild) <$>
-      switch (short 'l'
-               <> long "list-targets"
-               <> help "Don't build; instead list all buildable targets")
+      flag' ModeListTargets
+      (short 'l'
+        <> long "list-targets"
+        <> help "List all buildable targets")
+      <|>
+      flag' ModeListRules
+      (short 'r'
+        <> long "list-rules"
+        <> help "List all rules (building scanner dependecies if necessary)")
+      <|>
+      pure ModeBuild

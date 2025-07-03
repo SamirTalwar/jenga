@@ -5,6 +5,7 @@ import CommandLine qualified (exec)
 import Control.Monad (ap,liftM)
 import Control.Monad (when)
 import Data.Hash.MD5 qualified as MD5
+import Data.List (intercalate)
 import Data.List qualified as List (foldl')
 import Data.List.Split (splitOn)
 import Data.Map (Map)
@@ -12,10 +13,10 @@ import Data.Map qualified as Map
 import Interface (G(..),D(..),Rule(..),Action(..),Key(..),Loc(..))
 import StdBuildUtils ((</>),dirLoc)
 import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirectory,removePathForcibly,copyFile,getHomeDirectory)
+import System.Exit(ExitCode(..))
 import System.FilePath qualified as FP
 import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode,getFileStatus,isDirectory)
 import System.Process (shell,readCreateProcess,readCreateProcessWithExitCode)
-import System.Exit(ExitCode(..))
 import Text.Printf (printf)
 
 ----------------------------------------------------------------------
@@ -40,9 +41,33 @@ engineMain userProg = do
             let System{how} = system
             let allTargets = Map.keys how
             sequence_ [ BLog (show key) | key <- allTargets ]
+          ModeListRules -> do
+            let System{how,rules} = system
+            staticRules <-
+              sequence [ do (deps,action) <- gatherDeps config how depcom
+                            pure $ StaticRule { tag, targets, deps, action }
+                       | Rule{tag,targets,depcom} <- rules
+                       ]
+            BLog (intercalate "\n\n" (map show staticRules))
 
   when (i>0) $ do
     printf "ran %s\n" (pluralize i "action")
+
+data StaticRule = StaticRule
+  { tag :: String
+  , targets :: [Key]
+  , deps :: [Key]
+  , action :: Action
+  }
+
+-- TODO: this display of static rules does not take account of the fact that the
+-- action is relative and designed to be run in a sandbox.
+instance Show StaticRule where
+  show StaticRule{targets,deps,action} = do
+    printf "%s : %s\n  %s" (seeKeys targets) (seeKeys deps) (show action)
+
+seeKeys :: [Key] -> String
+seeKeys = intercalate " " . map show
 
 pluralize :: Int -> String -> String
 pluralize n what = printf "%d %s%s" n what (if n == 1 then "" else "s")
@@ -185,20 +210,6 @@ doBuild config@Config{seeB} how key = demand key
     log :: String -> B ()
     log mes = when seeB $ BLog (printf "B: %s" mes)
 
-    existsKey :: Key -> B Bool
-    existsKey key =
-      if Map.member key how
-      then pure True
-      else do
-        let Key loc = key
-        Execute (XFileExists loc)
-
-    readKey :: Key -> B String
-    readKey key = do
-      checksum <- demand key
-      file <- cacheFile checksum
-      Execute (XReadFile file)
-
     -- TODO: detect & error on build cycles
     demand :: Key -> B Checksum
     demand sought = do
@@ -226,7 +237,7 @@ doBuild config@Config{seeB} how key = demand key
         Just rule -> do
           log $ printf "Consult: %s" (show rule)
           let Rule{depcom} = rule
-          (deps,action) <- gatherDeps existsKey readKey depcom
+          (deps,action) <- gatherDeps config how depcom
 
           wdeps <- (WitMap . Map.fromList) <$>
             sequence [ do checksum <- demand dep; pure (locateKey dep,checksum)
@@ -248,10 +259,11 @@ doBuild config@Config{seeB} how key = demand key
               let checksum = lookWitMap (locateKey sought) wtargets
               pure checksum
 
-gatherDeps :: (Key -> B Bool) -> (Key -> B String) -> D a -> B ([Key],a)
-gatherDeps existsKey readKey d = loop d [] k0
+
+gatherDeps :: Config -> How -> D a -> B ([Key],a)
+gatherDeps config how d = loop d [] k0
   where
-    k0 xs a = pure (reverse xs,a) -- TODO: sort deps?
+    k0 xs a = pure (reverse xs,a)
     loop :: D a -> [Key] -> ([Key] -> a -> B ([Key],b)) -> B ([Key], b)
     loop d xs k = case d of
       DRet a -> k xs a
@@ -261,12 +273,27 @@ gatherDeps existsKey readKey d = loop d [] k0
         k xs ()
       DNeed key -> k (key:xs) ()
       DReadKey key -> do
-        contents <- readKey key
+        contents <- readKey config how key
         k xs contents
       DExistsKey key -> do
-        b <- existsKey key
+        b <- existsKey how key
         --Execute (XLog (printf "exists: %s -> %s" (show key) (show b)))
         k xs b
+
+readKey :: Config -> How -> Key -> B String
+readKey config how key = do
+  checksum <- doBuild config how key
+  file <- cacheFile checksum
+  Execute (XReadFile file)
+
+existsKey :: How -> Key -> B Bool
+existsKey how key =
+  if Map.member key how
+  then pure True
+  else do
+    let Key loc = key
+    Execute (XFileExists loc)
+
 
 buildWithRule :: Config -> Action -> WitMap -> Rule -> B WitMap
 buildWithRule Config{keepSandBoxes} action depWit rule = do
