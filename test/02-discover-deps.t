@@ -91,3 +91,25 @@ Switch main back to origianl defs file (causes no action)::
   materalizing 1 artifact
   $ ,jenga/example/main.exe
   hello, 55 UNIVERSE with auto discovery
+
+
+Use feature of CC setup macro which is conditionally dependent on cflags key...
+
+Compile with -Wall:
+  $ echo '-Wall' > example/cflags
+  $ ./jenga.exe build --local-cache -a
+  elaborated 5 rules and 5 targets
+  materalizing 1 artifact
+  A: cd .jbox/0; gcc -Wall -c fib.c -o fib.o
+  A: cd .jbox/1; gcc -Wall -c main.c -o main.o
+  ran 2 actions
+
+Compile with -O2 causes relink:
+  $ echo '-O2' > example/cflags
+  $ ./jenga.exe build --local-cache -a
+  elaborated 5 rules and 5 targets
+  materalizing 1 artifact
+  A: cd .jbox/0; gcc -O2 -c fib.c -o fib.o
+  A: cd .jbox/1; gcc -O2 -c main.c -o main.o
+  A: cd .jbox/2; gcc fib.o main.o -o main.exe
+  ran 3 actions

@@ -3,6 +3,7 @@ module ElabC (macroC) where
 import Interface (G(..),Rule(..),Action(..),D(..),Key(..),Loc)
 import StdBuildUtils (dirKey,listBaseNamesWithSuffix,mkKey,baseKeys,baseKey,(</>))
 import Text.Printf (printf)
+import Data.List (intercalate)
 
 macroC :: Key -> G ()
 macroC exe = do
@@ -51,8 +52,21 @@ ccCompileRule o c cDeps = Rule
   , targets = [o]
   , depcom = do
       cDeps
-      pure $ Bash (printf "gcc -c %s -o %s" (baseKey c) (baseKey o))
+      readOpt (Key (dirKey c </> "cflags")) >>= \case
+        Nothing -> pure $ Bash (printf "gcc -c %s -o %s" (baseKey c) (baseKey o))
+        Just cflags ->
+          pure $ Bash (printf "gcc %s -c %s -o %s" cflags (baseKey c) (baseKey o))
   }
+
+
+readOpt :: Key -> D (Maybe String)
+readOpt key = do
+  DExistsKey key >>= \case
+    True -> Just . looseNewlines <$> DReadKey key
+    False -> pure Nothing
+
+    where looseNewlines = intercalate " " . lines
+
 
 ccDepsRule :: Key -> Key  -> Rule
 ccDepsRule d c = Rule
