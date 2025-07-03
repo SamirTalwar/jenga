@@ -6,7 +6,6 @@ import Control.Monad (ap,liftM)
 import Control.Monad (when)
 import Data.Hash.MD5 qualified as MD5
 import Data.List qualified as List (foldl')
-import Data.List.Ordered (nubSort)
 import Data.List.Split (splitOn)
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -22,71 +21,55 @@ import Text.Printf (printf)
 ----------------------------------------------------------------------
 -- Engine main
 
-engineMain :: ([Loc] -> G ()) -> IO ()
+engineMain :: ([String] -> G ()) -> IO ()
 engineMain userProg = do
   config@Config{args,localCache} <- CommandLine.exec
   cacheDir <- if localCache then pure (Loc ".cache") else do
     home <- Loc <$> getHomeDirectory
     pure (home </> ".cache/jenga")
-  let args' = case args of [] -> ["."]; _ -> args
-  elaborateAndBuild cacheDir config $ do
-    xss <- mapM findStartingPointsFromTopLoc args'
-    let startingLocs = nubSort (concat xss)
-    (userProg startingLocs)
+  i <- runB cacheDir config $ do
+    initDirs
+    runElaboration config (userProg args) >>= \case
+      Left mes -> do
+        BLog $ printf "go -> Error:\n%s\n" (show mes)
+      Right system -> do
+        reportSystem system
+        runWithSystem config system
+  when (i>0) $ do
+    printf "ran %s\n" (pluralize i "action")
 
-findStartingPointsFromTopLoc :: String -> G [Loc] -- TODO: move to StdBuildUtils.hs and under user control
-findStartingPointsFromTopLoc arg = do
-  let loc = Loc arg
-  GExists loc >>= \case
-    False -> pure []
-    True -> do
-      GIsDirectory loc >>= \case
-        False -> pure []
-        True -> findSubdirsDeep loc
-
-findSubdirsDeep :: Loc -> G [Loc]
-findSubdirsDeep loc@(Loc fp) = do
-  if blockName fp then pure [] else do
-    subs <- findSubdirs loc
-    subsubs <- mapM findSubdirsDeep subs
-    pure (loc : concat subsubs)
-
-blockName :: String -> Bool
-blockName = \case
-  ".git" -> True
-  ".stack-work" -> True
-  ".cache" -> True
-  ",jenga" -> True
-  _ -> False
-
-findSubdirs :: Loc -> G [Loc]
-findSubdirs loc = do
-  locs <- GGlob loc
-  blocs <- sequence [ do b <- GIsDirectory loc; pure (b,loc) | loc <- locs ]
-  pure [ loc | (b,loc) <- blocs, b ]
-
-elaborateAndBuild :: Loc -> Config -> G () -> IO () -- TODO: move runB to caller
-elaborateAndBuild cacheDir config@Config{materializeAll} m = do
-  runB cacheDir config initDirs
-  runB cacheDir config (runElaboration config m) >>= \case
-    Left mes -> printf "go -> Error:\n%s\n" (show mes)
-    Right system -> do
-      let System{artifacts,rules,how} = system
-      let allTargets = Map.keys how
-      let whatToBuild = if materializeAll then allTargets else artifacts
-      printf "elaborated %s and %s\n"
-        (pluralize (length rules) "rule")
-        (pluralize (length how) "target")
-      printf "materalizing %s\n"
-        (if materializeAll then "all targets" else (pluralize (length artifacts) "artifact"))
-      runB cacheDir config $ do
-        let System{how} = system
-        sums <- doBuild config how whatToBuild
-        -- TODO: materialize as we build, so we see stuff even when build errors
-        sequence_ [ materialize sum key | (sum,key) <- zip sums whatToBuild ]
+reportSystem :: System -> B ()
+reportSystem system = do
+  let System{rules,how} = system
+  BLog $ printf "elaborated %s and %s"
+    (pluralize (length rules) "rule")
+    (pluralize (length how) "target")
 
 pluralize :: Int -> String -> String
 pluralize n what = printf "%d %s%s" n what (if n == 1 then "" else "s")
+
+runWithSystem :: Config -> System -> B ()
+runWithSystem config@Config{materializeAll} system = do
+  let System{artifacts,how} = system
+  let allTargets = Map.keys how
+  BLog $ printf "materalizing %s"
+    (if materializeAll then "all targets" else (pluralize (length artifacts) "artifact"))
+  let whatToBuild = if materializeAll then allTargets else artifacts
+  mapM_ (buildAndMaterialize config how) whatToBuild
+
+buildAndMaterialize :: Config -> How -> Key -> B ()
+buildAndMaterialize config how key = do
+  checksum <- doBuild config how key
+  materialize checksum key
+
+materialize :: Checksum -> Key -> B ()
+materialize (Checksum sum) (Key loc) = do
+  cachedFilesDir <- cachedFilesDir
+  let cacheFile = cachedFilesDir </> sum
+  let materializedFile = artifactsDir </> show loc
+  Execute $ do
+    XMakeDir (dirLoc materializedFile)
+    XHardLink cacheFile materializedFile
 
 ----------------------------------------------------------------------
 -- locations for cache, sandbox etc
@@ -177,7 +160,7 @@ runElaboration config@Config{seeE} m = loop m system0 k0
         k system bool
       GReadKey key -> do
         let System{how} = system
-        _ <- doBuild config how [key] -- building before elaboration is finished
+        _ <- doBuild config how key -- building before elaboration is finished
         let Key loc = key
         contents <- Execute (XReadFile loc)
         k system contents
@@ -188,17 +171,8 @@ locateKey (Key (Loc fp)) = Loc (FP.takeFileName fp)
 ----------------------------------------------------------------------
 -- Build
 
-materialize :: Checksum -> Key -> B ()
-materialize (Checksum sum) (Key loc) = do
-  cachedFilesDir <- cachedFilesDir
-  let cacheFile = cachedFilesDir </> sum
-  let materializedFile = artifactsDir </> show loc
-  Execute $ do
-    XMakeDir (dirLoc materializedFile)
-    XHardLink cacheFile materializedFile
-
-doBuild :: Config -> How -> [Key] -> B [Checksum]
-doBuild config@Config{seeB} how artifacts = mapM demand artifacts
+doBuild :: Config -> How -> Key -> B Checksum
+doBuild config@Config{seeB} how key = demand key
   where
     log :: String -> B ()
     log mes = when seeB $ BLog (printf "B: %s" mes)
@@ -450,7 +424,7 @@ instance Functor B where fmap = liftM
 instance Applicative B where pure = BRet; (<*>) = ap
 instance Monad B where (>>=) = BBind
 
-data B a where
+data B a where -- TODO: BFail?
   BRet :: a -> B a
   BBind :: B a -> (a -> B b) -> B b
   BLog :: String -> B ()
@@ -460,18 +434,17 @@ data B a where
   BGetKey :: Key -> B (Maybe Checksum)
   BSetKey :: Key -> Checksum -> B ()
 
-runB :: Loc -> Config -> B a -> IO a
+runB :: Loc -> Config -> B () -> IO Int
 runB cacheDir config b = runX config $ do
   loop b state0 k0
   where
     state0 = BState { sandboxCounter = 0, memo = Map.empty }
 
-    k0 :: BState -> a -> X a
-    k0 BState{sandboxCounter=i} a = do
-      when (i>0) $ XLog (printf "ran %s" (pluralize i "action"))
-      pure a
+    k0 :: BState -> () -> X Int
+    k0 BState{sandboxCounter=i} () = do
+      pure i
 
-    loop :: B a -> BState -> (BState -> a -> X b) -> X b
+    loop :: B a -> BState -> (BState -> a -> X Int) -> X Int
     loop m0 s k = case m0 of
       BRet a -> k s a
       BBind m f -> loop m s $ \s a -> loop (f a) s k
