@@ -16,7 +16,7 @@ Build from clean and run:
 
 Update build rules to link executable under a different name:
 
-  $ sed -i 's/main.exe/RENAMED.exe/' example/make.jenga
+  $ sed -i 's/main.exe/RENAMED.exe/' example/build.jenga
   $ ./jenga.exe build --local-cache -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact

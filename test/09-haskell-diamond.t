@@ -20,7 +20,7 @@
   Top[B[A],C[A]]
 
   $ ./jenga.exe build --local-cache -b | grep Require
-  B: Require: example/make.jenga
+  B: Require: example/build.jenga
   B: Require: example/diamond.exe
   B: Require: example/ghc.exe
   B: Require: example/ghc-path

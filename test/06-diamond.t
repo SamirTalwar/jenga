@@ -20,7 +20,7 @@ The example has a diamond dependency on target 'b', reached via 'ab' and 'bc'.
 During any build (incuding a zero-rebuild) we should require 'b' more than once.
 
   $ ./jenga.exe build --local-cache -b | grep Require
-  B: Require: example/make.jenga
+  B: Require: example/build.jenga
   B: Require: example/top
   B: Require: example/ab
   B: Require: example/a

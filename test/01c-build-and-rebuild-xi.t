@@ -24,16 +24,16 @@ Build from clean:
   I: ls example
   I: test -d example/fib.c
   I: test -d example/main.c
-  I: test -d example/make.jenga
+  I: test -d example/build.jenga
   I: ls .jbox
   I: ls .
   I: ls .jbox
   I: ls example
-  X: md5sum example/make.jenga
+  X: md5sum example/build.jenga
   I: test -e .cache/files/ade02a5a8e9b16d13646fc43aa2e61ca
-  I: cp example/make.jenga .cache/files/ade02a5a8e9b16d13646fc43aa2e61ca
+  I: cp example/build.jenga .cache/files/ade02a5a8e9b16d13646fc43aa2e61ca
   I: chmod a-w .cache/files/ade02a5a8e9b16d13646fc43aa2e61ca
-  I: cat example/make.jenga
+  I: cat example/build.jenga
   I: test -e example/main.o
   I: test -e example/fib.o
   I: test -e example/main.exe
@@ -108,14 +108,14 @@ Rebuild after no changes:
   I: ls example
   I: test -d example/fib.c
   I: test -d example/main.c
-  I: test -d example/make.jenga
+  I: test -d example/build.jenga
   I: ls .jbox
   I: ls .
   I: ls .jbox
   I: ls example
-  X: md5sum example/make.jenga
+  X: md5sum example/build.jenga
   I: test -e .cache/files/ade02a5a8e9b16d13646fc43aa2e61ca
-  I: cat example/make.jenga
+  I: cat example/build.jenga
   I: test -e example/main.o
   I: test -e example/fib.o
   I: test -e example/main.exe

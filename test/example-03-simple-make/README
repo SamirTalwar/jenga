@@ -1,4 +1,4 @@
-This is the driving example for simple-make.jenga
+This is the driving example for build.jenga
 Start with example of two .c files and a shared .h
 But with rules explicitly spelled out.
 Also add a .h.in -> .h preprocessing step
