@@ -1,4 +1,4 @@
-module CommandLine (Config(..),exec) where
+module CommandLine (Config(..),Mode(..),exec) where
 
 import Options.Applicative
 
@@ -12,7 +12,10 @@ data Config = Config
   , keepSandBoxes :: Bool
   , materializeAll :: Bool
   , args :: [FilePath]
+  , mode :: Mode
   } deriving Show
+
+data Mode = ModeBuild | ModeListTargets deriving Show
 
 exec :: IO Config
 exec = customExecParser
@@ -28,7 +31,7 @@ subCommands = hsubparser
 
 -- TODO: allow multiple setting of flags: -a -a
 buildCommand :: Parser Config
-buildCommand = Config <$> e <*> b <*> a <*> x <*> i <*> c <*> k <*> m <*> args
+buildCommand = Config <$> e <*> b <*> a <*> x <*> i <*> c <*> k <*> m <*> args <*> mode
   where
     e = switch (short 'e' <> help "Log steps for elaboration of targets and artifacts")
     b = switch (short 'b' <> help "Log steps for bringing a build up to date")
@@ -43,3 +46,9 @@ buildCommand = Config <$> e <*> b <*> a <*> x <*> i <*> c <*> k <*> m <*> args
                 <> help "Materialize all targets; not just declared artifacts")
     args = many (strArgument (metavar "DIRS"
                               <> help "directories containing build rules"))
+
+    mode =
+      (\b -> if b then ModeListTargets else ModeBuild) <$>
+      switch (short 'l'
+               <> long "list-targets"
+               <> help "Don't build; instead list all buildable targets")

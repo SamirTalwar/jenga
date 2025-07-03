@@ -1,6 +1,6 @@
 module Engine (engineMain) where
 
-import CommandLine (Config(..))
+import CommandLine (Config(..),Mode(..))
 import CommandLine qualified (exec)
 import Control.Monad (ap,liftM)
 import Control.Monad (when)
@@ -23,7 +23,7 @@ import Text.Printf (printf)
 
 engineMain :: ([String] -> G ()) -> IO ()
 engineMain userProg = do
-  config@Config{args,localCache} <- CommandLine.exec
+  config@Config{args,localCache,mode} <- CommandLine.exec
   cacheDir <- if localCache then pure (Loc ".cache") else do
     home <- Loc <$> getHomeDirectory
     pure (home </> ".cache/jenga")
@@ -33,10 +33,30 @@ engineMain userProg = do
       Left mes -> do
         BLog $ printf "go -> Error:\n%s\n" (show mes)
       Right system -> do
-        reportSystem system
-        runWithSystem config system
+        case mode of
+          ModeBuild -> do
+            buildWithSystem config system
+          ModeListTargets -> do
+            let System{how} = system
+            let allTargets = Map.keys how
+            sequence_ [ BLog (show key) | key <- allTargets ]
+
   when (i>0) $ do
     printf "ran %s\n" (pluralize i "action")
+
+pluralize :: Int -> String -> String
+pluralize n what = printf "%d %s%s" n what (if n == 1 then "" else "s")
+
+
+buildWithSystem :: Config -> System -> B ()
+buildWithSystem config@Config{materializeAll} system = do
+  reportSystem system
+  let System{artifacts,how} = system
+  let allTargets = Map.keys how
+  BLog $ printf "materalizing %s"
+    (if materializeAll then "all targets" else (pluralize (length artifacts) "artifact"))
+  let whatToBuild = if materializeAll then allTargets else artifacts
+  mapM_ (buildAndMaterialize config how) whatToBuild
 
 reportSystem :: System -> B ()
 reportSystem system = do
@@ -44,18 +64,6 @@ reportSystem system = do
   BLog $ printf "elaborated %s and %s"
     (pluralize (length rules) "rule")
     (pluralize (length how) "target")
-
-pluralize :: Int -> String -> String
-pluralize n what = printf "%d %s%s" n what (if n == 1 then "" else "s")
-
-runWithSystem :: Config -> System -> B ()
-runWithSystem config@Config{materializeAll} system = do
-  let System{artifacts,how} = system
-  let allTargets = Map.keys how
-  BLog $ printf "materalizing %s"
-    (if materializeAll then "all targets" else (pluralize (length artifacts) "artifact"))
-  let whatToBuild = if materializeAll then allTargets else artifacts
-  mapM_ (buildAndMaterialize config how) whatToBuild
 
 buildAndMaterialize :: Config -> How -> Key -> B ()
 buildAndMaterialize config how key = do
