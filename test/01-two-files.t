@@ -222,3 +222,40 @@ Materalize just artifacts:
   ,jenga/ANOTHER/RENAMED.exe
   ,jenga/RELOCATED
   ,jenga/RELOCATED/RENAMED.exe
+
+Blow away the local cache and rebuild keeping sandboxes:
+
+  $ rm -rf .cache
+  $ ./jenga.exe build --local-cache -k
+  elaborated 6 rules and 6 targets
+  materalizing 2 artifacts
+  ran 5 actions
+
+  $ find .jbox
+  .jbox
+  .jbox/0
+  .jbox/0/fib.o
+  .jbox/0/fib.c
+  .jbox/4
+  .jbox/4/fib.o
+  .jbox/4/RENAMED.exe
+  .jbox/4/main.o
+  .jbox/3
+  .jbox/3/main.c
+  .jbox/3/main.o
+  .jbox/1
+  .jbox/1/main.c
+  .jbox/1/main.o
+  .jbox/2
+  .jbox/2/fib.o
+  .jbox/2/RENAMED.exe
+  .jbox/2/main.o
+
+Zero rebuild and the sandboxes are removed
+
+  $ ./jenga.exe build --local-cache
+  elaborated 6 rules and 6 targets
+  materalizing 2 artifacts
+
+  $ find .jbox
+  .jbox
