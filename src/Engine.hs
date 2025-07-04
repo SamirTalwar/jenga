@@ -28,7 +28,7 @@ type UserProg = [String] -> G ()
 engineMain :: UserProg -> IO ()
 engineMain userProg = do
   config@Config{localCache} <- CommandLine.exec
-  cacheDir <- if localCache then pure (Loc ".cache") else do
+  cacheDir <- if localCache then pure (Loc ".cache/jenga") else do
     home <- Loc <$> getHomeDirectory
     pure (home </> ".cache/jenga")
   myPid <- getCurrentPid

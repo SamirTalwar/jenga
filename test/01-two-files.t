@@ -56,8 +56,8 @@ We take care to mask any pids referenced by sanboxes
 
   $ ./jenga.exe build --local-cache -axi | sed 's|jbox/[0-9]*|jbox/$$|'
   I: rm -rf ,jenga
-  I: mkdir -p .cache/files
-  I: mkdir -p .cache/traces
+  I: mkdir -p .cache/jenga/files
+  I: mkdir -p .cache/jenga/traces
   I: mkdir -p ,jenga
   I: test -e .
   I: test -d .
@@ -74,7 +74,7 @@ We take care to mask any pids referenced by sanboxes
   I: ls example
   I: test -e example/build.jenga
   X: md5sum example/build.jenga
-  I: test -e .cache/files/ade02a5a8e9b16d13646fc43aa2e61ca
+  I: test -e .cache/jenga/files/ade02a5a8e9b16d13646fc43aa2e61ca
   I: cat example/build.jenga
   I: test -e example/main.o
   I: test -e example/fib.o
@@ -83,24 +83,24 @@ We take care to mask any pids referenced by sanboxes
   materalizing 1 artifact
   I: test -e example/fib.c
   X: md5sum example/fib.c
-  I: test -e .cache/files/3ec221831446382d711ea3ce24237158
+  I: test -e .cache/jenga/files/3ec221831446382d711ea3ce24237158
   I: md5sum
-  I: test -e .cache/traces/347c90127bbc1461aecd80702c3c5bc4
-  I: cat .cache/traces/347c90127bbc1461aecd80702c3c5bc4
-  I: test -e .cache/files/47a0ee09b975f7501dbeb5431b76c24c
+  I: test -e .cache/jenga/traces/347c90127bbc1461aecd80702c3c5bc4
+  I: cat .cache/jenga/traces/347c90127bbc1461aecd80702c3c5bc4
+  I: test -e .cache/jenga/files/47a0ee09b975f7501dbeb5431b76c24c
   I: test -e example/main.c
   X: md5sum example/main.c
-  I: test -e .cache/files/9d125f57501617a7e09da68a33e65d1c
+  I: test -e .cache/jenga/files/9d125f57501617a7e09da68a33e65d1c
   I: md5sum
-  I: test -e .cache/traces/6ce82221b5bd8437a672f4e6d19a9d9e
-  I: cat .cache/traces/6ce82221b5bd8437a672f4e6d19a9d9e
-  I: test -e .cache/files/aac22b6d9cbb6711115a1ebde2cfd6a1
+  I: test -e .cache/jenga/traces/6ce82221b5bd8437a672f4e6d19a9d9e
+  I: cat .cache/jenga/traces/6ce82221b5bd8437a672f4e6d19a9d9e
+  I: test -e .cache/jenga/files/aac22b6d9cbb6711115a1ebde2cfd6a1
   I: md5sum
-  I: test -e .cache/traces/4677478c51f6bbba384ed576c9e451ed
-  I: cat .cache/traces/4677478c51f6bbba384ed576c9e451ed
-  I: test -e .cache/files/9efc05831ccef0c24b2697d8fff2acee
+  I: test -e .cache/jenga/traces/4677478c51f6bbba384ed576c9e451ed
+  I: cat .cache/jenga/traces/4677478c51f6bbba384ed576c9e451ed
+  I: test -e .cache/jenga/files/9efc05831ccef0c24b2697d8fff2acee
   I: mkdir -p ,jenga/example
-  I: ln .cache/files/9efc05831ccef0c24b2697d8fff2acee ,jenga/example/main.exe
+  I: ln .cache/jenga/files/9efc05831ccef0c24b2697d8fff2acee ,jenga/example/main.exe
   I: rm -rf /tmp/.jbox/$$
 
 Update main.c "world->UNIVERSE" and rerun:
