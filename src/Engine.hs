@@ -18,18 +18,27 @@ import System.FilePath qualified as FP
 import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode,getFileStatus,isDirectory)
 import System.Process (shell,readCreateProcess,readCreateProcessWithExitCode)
 import Text.Printf (printf)
+import Control.Exception (try,SomeException)
 
 ----------------------------------------------------------------------
 -- Engine main
 
-engineMain :: ([String] -> G ()) -> IO ()
+type UserProg = [String] -> G ()
+
+engineMain :: UserProg -> IO ()
 engineMain userProg = do
-  config@Config{args,localCache,mode} <- CommandLine.exec
+  config@Config{localCache} <- CommandLine.exec
   cacheDir <- if localCache then pure (Loc ".cache") else do
     home <- Loc <$> getHomeDirectory
     pure (home </> ".cache/jenga")
   i <- runB cacheDir config $ do
     initDirs
+    elaborateAndBuild config userProg
+  when (i>0) $ do
+    printf "ran %s\n" (pluralize i "action")
+
+elaborateAndBuild :: Config -> UserProg -> B ()
+elaborateAndBuild config@Config{mode,args} userProg =
     runElaboration config (userProg args) >>= \case
       Left mes -> do
         BLog $ printf "go -> Error:\n%s\n" (show mes)
@@ -49,9 +58,6 @@ engineMain userProg = do
                        | Rule{tag,targets,depcom} <- rules
                        ]
             BLog (intercalate "\n\n" (map show staticRules))
-
-  when (i>0) $ do
-    printf "ran %s\n" (pluralize i "action")
 
 data StaticRule = StaticRule
   { tag :: String
@@ -102,7 +108,9 @@ materialize (Checksum sum) (Key loc) = do
   let materializedFile = artifactsDir </> show loc
   Execute $ do
     XMakeDir (dirLoc materializedFile)
-    XHardLink cacheFile materializedFile
+    XHardLink cacheFile materializedFile >>= \case
+      True -> pure ()
+      False -> error "Materialize/HardLink: we lost the race" -- TODO
 
 ----------------------------------------------------------------------
 -- locations for cache, sandbox etc
@@ -230,7 +238,7 @@ doBuild config@Config{seeB} how key = demand key
             False -> do
               error (printf "'%s' is not source and has no build rule" (show sought))
             True -> do
-              checksum <- insertIntoCache Soft loc
+              checksum <- copyIntoCache loc
               pure checksum
 
         -- TODO: document this flow...
@@ -314,7 +322,11 @@ setupInputs sandbox (WitMap m1) = do
   sequence_
     [ do
         file <- cacheFile checksum
-        Execute (XHardLink file (sandbox </> show loc))
+        Execute $ do
+          XHardLink file (sandbox </> show loc) >>= \case
+            True -> pure ()
+            False -> error "setupInput/HardLink: we lost the race" -- TODO
+
     | (loc,checksum) <- Map.toList m1
     ]
 
@@ -328,24 +340,43 @@ cacheOutputs sandbox targets = do
           False -> do
             error (printf "rule failed to produced declared target '%s'" (show target))
           True -> do
-            checksum <- insertIntoCache Hard sandboxLoc
+            checksum <- linkIntoCache sandboxLoc
             pure (tag,checksum)
     | target <- targets
     ]
 
-data InsertMode = Soft | Hard
-
-insertIntoCache :: InsertMode -> Loc -> B Checksum
-insertIntoCache mode loc = do
-  let insertCommand = case mode of Soft -> XCopyFile; Hard -> XHardLink
+copyIntoCache :: Loc -> B Checksum
+copyIntoCache loc = do
   checksum <- Execute (XMd5sum loc)
   file <- cacheFile checksum
   Execute (XFileExists file) >>= \case
-    -- TODO: when the file exists, we should propogate the executable status bit in case it has changed
     True -> pure ()
-    False -> Execute $ do
-      insertCommand loc file
-      XMakeReadOnly file
+    False -> do
+      Execute $ do
+        XCopyFile loc file
+        XMakeReadOnly file
+  pure checksum
+
+linkIntoCache :: Loc -> B Checksum
+linkIntoCache loc = do
+  checksum <- Execute (XMd5sum loc)
+  file <- cacheFile checksum
+  Execute $ do
+    XFileExists file >>= \case -- small optimization
+      True -> pure ()
+      False -> do
+        -- even though the file didn't exist just above, it could appear by now
+        -- and so make this hard link fail.
+        XHardLink loc file >>= \case
+          True -> pure ()
+          False -> do
+            -- Likely a concurrently runnning jenga has chosen to run the same rule as us,
+            -- at the same time, producing the same output.
+            -- When we implement job locking, this should't happen.
+            XLog (printf "linkIntoCache/HardLink: we lost the race: %s -> %s" (show loc) (show file))
+            -- TODO: propogate the executable status
+            pure ()
+    XMakeReadOnly file
   pure checksum
 
 cacheFile :: Checksum -> B Loc
@@ -525,7 +556,7 @@ data X a where
   XMakeReadOnly :: Loc -> X ()
   XReadFile :: Loc -> X String
   XWriteFile :: String -> Loc -> X ()
-  XHardLink :: Loc -> Loc -> X ()
+  XHardLink :: Loc -> Loc -> X Bool -- False means it already exists
   XRemoveDirRecursive :: Loc -> X ()
 
 runX :: Config -> X a -> IO a
@@ -603,7 +634,16 @@ runX Config{seeA,seeX,seeI} = loop
         writeFile dest contents
       XHardLink (Loc src) (Loc dest) -> do
         logI $ printf "ln %s %s" src dest
-        createLink src dest
+        myCreateLink src dest
       XRemoveDirRecursive (Loc fp) -> do
         logI $ printf "rm -rf %s" fp
         removePathForcibly fp
+
+
+myCreateLink :: FilePath -> FilePath -> IO Bool
+myCreateLink a b = do
+  try (createLink a b) >>= \case
+    Right () -> pure True
+    Left (_e::SomeException) -> do
+      --printf "myCreateLink: caught %s\n" (show _e)
+      pure False
