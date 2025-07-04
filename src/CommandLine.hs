@@ -4,8 +4,8 @@ import Options.Applicative
 
 -- TODO: maybe simplify loging verbosity: -v (A + count info) -vv (EBX) -vvv (I)
 data Config = Config
-  { seeB :: Bool
-  , seeA :: Bool
+  { seeA :: Bool
+  , seeB :: Bool
   , seeX :: Bool
   , seeI :: Bool
   , cacheParentOverride :: Maybe String -- Nothing means use default in $HOME
@@ -30,45 +30,42 @@ subCommands = hsubparser
     (info buildCommand
       (progDesc "Bring a build up to date")))
 
+-- TODO: remove 'a' and 'b' with verbosity levels
 buildCommand :: Parser Config
-buildCommand =
-  Config <$> b <*> a <*> x <*> i <*> c <*> k <*> m <*> r <*> args <*> mode
-  where
-    -- TODO: consider removing the less useful short names
-    b = switch (short 'b' <> help "Log steps for bringing a build up to date")
-    a = switch (short 'a' <> help "Log execution of user build commands")
-
-    x = switch (short 'x' <> help "Log execution of externally run commands")
-    i = switch (short 'i' <> help "Log execution of internal file system access")
-
-    c =
-      Just <$> strOption
-      (short 'c' <> long "cache" <> metavar "DIR"
-        <> help "Use .cache/jenga in DIR instead of $HOME"
-      )
-      <|>
-      pure Nothing
-
-    k = switch (short 'k' <> long "keep-sandboxes"
-                <> help "Keep all sandboxes when build completes")
-    m = switch (short 'm' <> long "materialize-all"
-                <> help "Materialize all targets; not just declared artifacts")
-
-    r = switch (long "reverse"
-                <> help "Build dependencies in reverse order; experiment for concurrent jenga")
-
-    args = many (strArgument (metavar "DIRS"
-                              <> help "directories containing build rules"))
-
-    mode =
-      flag' ModeListTargets
-      (short 'l'
-        <> long "list-targets"
-        <> help "List all buildable targets")
-      <|>
-      flag' ModeListRules
-      (short 'r'
-        <> long "list-rules"
-        <> help "List all rules (building scanner dependecies if necessary)")
-      <|>
-      pure ModeBuild
+buildCommand = Config
+  <$> switch (short 'a' <> help "Log execution of user build commands")
+  <*> switch (short 'b' <> help "Log required keys when bringing a build up to date")
+  <*> switch (short 'x' <> help "Log execution of externally run commands")
+  <*> switch (short 'i' <> help "Log execution of internal file system access")
+  <*> (
+  Just <$> strOption
+    (short 'c' <> long "cache" <> metavar "DIR"
+     <> help "Use .cache/jenga in DIR instead of $HOME"
+    )
+    <|> pure Nothing
+  )
+  <*>
+  switch (short 'k' <> long "keep-sandboxes"
+          <> help "Keep all sandboxes when build completes")
+  <*>
+  switch (short 'm' <> long "materialize-all"
+          <> help "Materialize all targets; not just declared artifacts")
+  <*>
+  switch (long "reverse"
+          <> help "Build dependencies in reverse order; experiment for concurrent jenga")
+  <*>
+  many (strArgument (metavar "DIRS"
+                      <> help "directories containing build rules"))
+  <*> (
+  flag' ModeListTargets
+    (short 'l'
+      <> long "list-targets"
+      <> help "List all buildable targets")
+    <|>
+    flag' ModeListRules
+    (short 'r'
+      <> long "list-rules"
+      <> help "List all rules (building scanner dependecies if necessary)")
+    <|>
+    pure ModeBuild
+  )
