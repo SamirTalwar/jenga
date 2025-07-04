@@ -150,16 +150,13 @@ data System = System { artifacts :: [Key], rules :: [Rule], how :: How }
 type How = Map Key Rule
 
 runElaboration :: Config -> G () -> B (OrErr System)
-runElaboration config@Config{seeE=_} m = loop m system0 k0
+runElaboration config m = loop m system0 k0
   where
     system0 :: System
     system0 = System { rules = [], artifacts = [], how = Map.empty }
 
     k0 :: System -> () -> B (OrErr System)
     k0 s () = pure (Right s)
-
-    --logE :: String -> B ()
-    --logE mes = when seeE $ BLog (printf "E: %s" mes)
 
     loop :: G a -> System -> (System -> a -> B (OrErr System)) -> B (OrErr System)
     loop m system k = case m of
@@ -171,7 +168,7 @@ runElaboration config@Config{seeE=_} m = loop m system0 k0
       GFail mes -> pure (Left (ErrMessage mes)) -- ignore k
       GRule rule -> do
         let Rule{targets} = rule
-        --logE $ printf "Elaborate rule: %s" (show rule)
+        --BLog $ printf "Elaborate rule: %s" (show rule)
         xs <- sequence [ do b <- Execute (XFileExists loc); pure (key,b)
                         | key@(Key loc) <- targets ]
         case [ key | (key,isSource) <- xs, isSource ] of
@@ -189,7 +186,6 @@ runElaboration config@Config{seeE=_} m = loop m system0 k0
                 k system { rules = rule : rules, how } ()
 
       GArtifact key -> do
-        -- logE $ printf "Elaborate artifact: %s" (show key)
         let System{artifacts} = system
         k system { artifacts = key : artifacts } ()
       GGlob dir -> do

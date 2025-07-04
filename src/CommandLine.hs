@@ -4,8 +4,7 @@ import Options.Applicative
 
 -- TODO: maybe simplify loging verbosity: -v (A + count info) -vv (EBX) -vvv (I)
 data Config = Config
-  { seeE :: Bool
-  , seeB :: Bool
+  { seeB :: Bool
   , seeA :: Bool
   , seeX :: Bool
   , seeI :: Bool
@@ -31,15 +30,14 @@ subCommands = hsubparser
     (info buildCommand
       (progDesc "Bring a build up to date")))
 
--- TODO: allow multiple setting of flags: -a -a
 buildCommand :: Parser Config
 buildCommand =
-  Config <$> e <*> b <*> a <*> x <*> i <*> c <*> k <*> m <*> r <*> args <*> mode
+  Config <$> b <*> a <*> x <*> i <*> c <*> k <*> m <*> r <*> args <*> mode
   where
     -- TODO: consider removing the less useful short names
-    e = switch (short 'e' <> help "Log steps for elaboration of targets and artifacts")
     b = switch (short 'b' <> help "Log steps for bringing a build up to date")
     a = switch (short 'a' <> help "Log execution of user build commands")
+
     x = switch (short 'x' <> help "Log execution of externally run commands")
     i = switch (short 'i' <> help "Log execution of internal file system access")
 
