@@ -5,12 +5,12 @@
   $ ./jenga.exe build --local-cache -a
   elaborated 6 rules and 6 targets
   materalizing 1 artifact
-  A: cd .jbox/0; echo -n A > a
-  A: cd .jbox/1; echo -n B  > b
-  A: cd .jbox/2; cat a b > ab
-  A: cd .jbox/3; echo -n C > c
-  A: cd .jbox/4; cat b c > bc
-  A: cd .jbox/5; cat ab bc > top
+  A: echo -n A > a
+  A: echo -n B  > b
+  A: cat a b > ab
+  A: echo -n C > c
+  A: cat b c > bc
+  A: cat ab bc > top
   ran 6 actions
 
   $ cat ,jenga/example/top

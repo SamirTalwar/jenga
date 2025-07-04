@@ -16,7 +16,7 @@ import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirec
 import System.Exit(ExitCode(..))
 import System.FilePath qualified as FP
 import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode,getFileStatus,isDirectory)
-import System.Process (shell,readCreateProcess,readCreateProcessWithExitCode)
+import System.Process (shell,readCreateProcess,readCreateProcessWithExitCode,Pid,getCurrentPid)
 import Text.Printf (printf)
 import Control.Exception (try,SomeException)
 
@@ -31,7 +31,8 @@ engineMain userProg = do
   cacheDir <- if localCache then pure (Loc ".cache") else do
     home <- Loc <$> getHomeDirectory
     pure (home </> ".cache/jenga")
-  i <- runB cacheDir config $ do
+  myPid <- getCurrentPid
+  i <- runB myPid cacheDir config $ do
     initDirs
     elaborateAndBuild config userProg
   when (i>0) $ do
@@ -120,20 +121,17 @@ cachedFilesDir,tracesDir :: B Loc
 cachedFilesDir = do cacheDir <- BCacheDir; pure (cacheDir </> "files")
 tracesDir = do cacheDir <- BCacheDir; pure (cacheDir </> "traces")
 
-sandboxDir,artifactsDir :: Loc
+artifactsDir :: Loc
 artifactsDir = Loc ",jenga"
-sandboxDir = Loc ".jbox"
 
 initDirs :: B ()
 initDirs = do
   tracesDir <- tracesDir
   cachedFilesDir <- cachedFilesDir
   Execute $ do
-    XRemoveDirRecursive sandboxDir
     XRemoveDirRecursive artifactsDir
     XMakeDir cachedFilesDir
     XMakeDir tracesDir
-    XMakeDir sandboxDir
     XMakeDir artifactsDir
 
 ----------------------------------------------------------------------
@@ -504,14 +502,22 @@ data B a where -- TODO: BFail?
   BGetKey :: Key -> B (Maybe Checksum)
   BSetKey :: Key -> Checksum -> B ()
 
-runB :: Loc -> Config -> B () -> IO Int
-runB cacheDir config b = runX config $ do
+runB :: Pid -> Loc -> Config -> B () -> IO Int
+runB myPid cacheDir config@Config{keepSandBoxes} b = runX config $ do
   loop b state0 k0
   where
+    -- TODO: We should cleanup our sandbox dir on abort.
+    -- Currently it gets left if we C-c jenga
+    -- Or if any build command fails; since that aborts jenga (TODO: fix that!)
+    -- This means that even the cram tests leave .jbox droppings around.
+    -- Not the end of the day, but we could be cleaner.
+    sandboxParentDirForThisProcess = Loc (printf "/tmp/.jbox/%s" (show myPid))
+
     state0 = BState { sandboxCounter = 0, memo = Map.empty }
 
     k0 :: BState -> () -> X Int
     k0 BState{sandboxCounter=i} () = do
+      when (not keepSandBoxes) $ XRemoveDirRecursive sandboxParentDirForThisProcess
       pure i
 
     loop :: B a -> BState -> (BState -> a -> X Int) -> X Int
@@ -522,7 +528,7 @@ runB cacheDir config b = runX config $ do
       BCacheDir -> k s cacheDir
       BNewSandbox -> do
         let BState{sandboxCounter=i} = s
-        k s { sandboxCounter = i+1 } (sandboxDir </> show i)
+        k s { sandboxCounter = i+1 } (sandboxParentDirForThisProcess </> show i)
       Execute x -> do a <- x; k s a
       BGetKey key -> do
         let BState{memo} = s
@@ -581,7 +587,9 @@ runX Config{seeA,seeX,seeI} = loop
       -- sandboxed execution of user's action; for now always a bash command
       XRunActionInDir (Loc dir) action -> do
         let (Bash command) = action
-        logA $ printf "cd %s; %s" dir command
+        -- Don't print sandbox dir as it contains $$ and so is not stable. Bad for testing!
+        -- logA $ printf "cd %s; %s" dir command
+        logA $ command
         (exitCode,stdout,stderr) <-
           withCurrentDirectory dir (readCreateProcessWithExitCode (shell command) "")
         -- TODO: better management & report of stdout/stderr

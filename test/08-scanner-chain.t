@@ -6,12 +6,12 @@ Initial build
   $ ./jenga.exe build --local-cache -am
   elaborated 6 rules and 6 targets
   materalizing all targets
-  A: cd .jbox/0; gcc -MG -MM fib.c > fib.d
-  A: cd .jbox/1; gcc -c fib.c -o fib.o
-  A: cd .jbox/2; (echo -n 'main.d '; gcc -MG -MM main.c) > main.d2
-  A: cd .jbox/3; gcc -MG -MM main.c > main.d
-  A: cd .jbox/4; gcc -c main.c -o main.o
-  A: cd .jbox/5; gcc fib.o main.o -o main.exe
+  A: gcc -MG -MM fib.c > fib.d
+  A: gcc -c fib.c -o fib.o
+  A: (echo -n 'main.d '; gcc -MG -MM main.c) > main.d2
+  A: gcc -MG -MM main.c > main.d
+  A: gcc -c main.c -o main.o
+  A: gcc fib.o main.o -o main.exe
   ran 6 actions
 
 Run the executable
@@ -29,8 +29,8 @@ Mod-A (change const value)
   $ ./jenga.exe build --local-cache -am
   elaborated 6 rules and 6 targets
   materalizing all targets
-  A: cd .jbox/0; gcc -c main.c -o main.o
-  A: cd .jbox/1; gcc fib.o main.o -o main.exe
+  A: gcc -c main.c -o main.o
+  A: gcc fib.o main.o -o main.exe
   ran 2 actions
   $ ,jenga/example/main.exe
   hello, 89 world with #include chain
@@ -44,9 +44,9 @@ Mod-B (shorten the chain)
   $ ./jenga.exe build --local-cache -am
   elaborated 6 rules and 6 targets
   materalizing all targets
-  A: cd .jbox/0; gcc -MG -MM main.c > main.d
-  A: cd .jbox/1; gcc -c main.c -o main.o
-  A: cd .jbox/2; gcc fib.o main.o -o main.exe
+  A: gcc -MG -MM main.c > main.d
+  A: gcc -c main.c -o main.o
+  A: gcc fib.o main.o -o main.exe
   ran 3 actions
   $ ,jenga/example/main.exe
   hello, 144 world with #include chain
@@ -61,9 +61,9 @@ Mod-C (repoint the chain)
   $ ./jenga.exe build --local-cache -am
   elaborated 6 rules and 6 targets
   materalizing all targets
-  A: cd .jbox/0; gcc -MG -MM main.c > main.d
-  A: cd .jbox/1; gcc -c main.c -o main.o
-  A: cd .jbox/2; gcc fib.o main.o -o main.exe
+  A: gcc -MG -MM main.c > main.d
+  A: gcc -c main.c -o main.o
+  A: gcc fib.o main.o -o main.exe
   ran 3 actions
   $ ,jenga/example/main.exe
   hello, 233 world with #include chain

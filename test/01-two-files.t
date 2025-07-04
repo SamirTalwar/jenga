@@ -19,9 +19,9 @@ Build from clean:
   $ ./jenga.exe build --local-cache -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
-  A: cd .jbox/0; gcc -c fib.c -o fib.o
-  A: cd .jbox/1; gcc -c main.c -o main.o
-  A: cd .jbox/2; gcc fib.o main.o -o main.exe
+  A: gcc -c fib.c -o fib.o
+  A: gcc -c main.c -o main.o
+  A: gcc fib.o main.o -o main.exe
   ran 3 actions
 
 See the artifacts:
@@ -52,13 +52,12 @@ Add '-x' flag for a more detailed logging.
   X: md5sum example/main.c
 
 Add '-xi flags for very detailed logging. Test will be fragile to any change in example source.
+We take care to mask any pids referenced by sanboxes
 
-  $ ./jenga.exe build --local-cache -axi
-  I: rm -rf .jbox
+  $ ./jenga.exe build --local-cache -axi | sed 's|jbox/[0-9]*|jbox/$$|'
   I: rm -rf ,jenga
   I: mkdir -p .cache/files
   I: mkdir -p .cache/traces
-  I: mkdir -p .jbox
   I: mkdir -p ,jenga
   I: test -e .
   I: test -d .
@@ -67,14 +66,11 @@ Add '-xi flags for very detailed logging. Test will be fragile to any change in 
   I: test -d .cache
   I: test -d example
   I: test -d ,jenga
-  I: test -d .jbox
   I: ls example
   I: test -d example/fib.c
   I: test -d example/main.c
   I: test -d example/build.jenga
-  I: ls .jbox
   I: ls .
-  I: ls .jbox
   I: ls example
   I: test -e example/build.jenga
   X: md5sum example/build.jenga
@@ -105,6 +101,7 @@ Add '-xi flags for very detailed logging. Test will be fragile to any change in 
   I: test -e .cache/files/9efc05831ccef0c24b2697d8fff2acee
   I: mkdir -p ,jenga/example
   I: ln .cache/files/9efc05831ccef0c24b2697d8fff2acee ,jenga/example/main.exe
+  I: rm -rf /tmp/.jbox/$$
 
 Update main.c "world->UNIVERSE" and rerun:
 
@@ -112,8 +109,8 @@ Update main.c "world->UNIVERSE" and rerun:
   $ ./jenga.exe build --local-cache -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
-  A: cd .jbox/0; gcc -c main.c -o main.o
-  A: cd .jbox/1; gcc fib.o main.o -o main.exe
+  A: gcc -c main.c -o main.o
+  A: gcc fib.o main.o -o main.exe
   ran 2 actions
   $ ,jenga/example/main.exe
   hello, 55 UNIVERSE
@@ -133,7 +130,7 @@ Whitespace only change to main.c cause no link step (early cutoff):
   $ ./jenga.exe build --local-cache -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
-  A: cd .jbox/0; gcc -c main.c -o main.o
+  A: gcc -c main.c -o main.o
   ran 1 action
 
 Update build rules to link executable under a different name:
@@ -142,7 +139,7 @@ Update build rules to link executable under a different name:
   $ ./jenga.exe build --local-cache -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
-  A: cd .jbox/0; gcc fib.o main.o -o RENAMED.exe
+  A: gcc fib.o main.o -o RENAMED.exe
   ran 1 action
 
   $ ,jenga/example/RENAMED.exe
@@ -185,8 +182,8 @@ Modify code in one of the example directories; minimal rebuild as required:
   $ ./jenga.exe build --local-cache -a
   elaborated 6 rules and 6 targets
   materalizing 2 artifacts
-  A: cd .jbox/0; gcc -c main.c -o main.o
-  A: cd .jbox/1; gcc fib.o main.o -o RENAMED.exe
+  A: gcc -c main.c -o main.o
+  A: gcc fib.o main.o -o RENAMED.exe
   ran 2 actions
 
 Run the two versions:
@@ -225,40 +222,3 @@ Materalize just artifacts:
   ,jenga/ANOTHER/RENAMED.exe
   ,jenga/RELOCATED
   ,jenga/RELOCATED/RENAMED.exe
-
-Blow away the local cache and rebuild keeping sandboxes:
-
-  $ rm -rf .cache
-  $ ./jenga.exe build --local-cache -k
-  elaborated 6 rules and 6 targets
-  materalizing 2 artifacts
-  ran 5 actions
-
-  $ find .jbox
-  .jbox
-  .jbox/0
-  .jbox/0/fib.o
-  .jbox/0/fib.c
-  .jbox/4
-  .jbox/4/fib.o
-  .jbox/4/RENAMED.exe
-  .jbox/4/main.o
-  .jbox/3
-  .jbox/3/main.c
-  .jbox/3/main.o
-  .jbox/1
-  .jbox/1/main.c
-  .jbox/1/main.o
-  .jbox/2
-  .jbox/2/fib.o
-  .jbox/2/RENAMED.exe
-  .jbox/2/main.o
-
-Zero rebuild and the sandboxes are removed
-
-  $ ./jenga.exe build --local-cache
-  elaborated 6 rules and 6 targets
-  materalizing 2 artifacts
-
-  $ find .jbox
-  .jbox

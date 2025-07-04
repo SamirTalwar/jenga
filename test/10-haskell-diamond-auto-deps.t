@@ -5,16 +5,16 @@
   $ ./jenga.exe build --local-cache -a
   elaborated 10 rules and 15 targets
   materalizing 6 artifacts
-  A: cd .jbox/0; find $HOME/.stack | grep -v lib | grep bin/ghc$ | sort -n | tail -1 > ghc-path
-  A: cd .jbox/1; echo exec $(cat ghc-path) '"$@"' > ghc.exe ; chmod +x ghc.exe
-  A: cd .jbox/2; echo 'import Top' > main.hs
-  A: cd .jbox/3; ./ghc.exe -M *.hs -dep-makefile depends
-  A: cd .jbox/4; ./ghc.exe -c A.hs
-  A: cd .jbox/5; ./ghc.exe -c C.hs
-  A: cd .jbox/6; ./ghc.exe -c B.hs
-  A: cd .jbox/7; ./ghc.exe -c Top.hs
-  A: cd .jbox/8; ./ghc.exe -c main.hs
-  A: cd .jbox/9; ./ghc.exe -o diamond.exe main.o Top.o B.o C.o A.o
+  A: find $HOME/.stack | grep -v lib | grep bin/ghc$ | sort -n | tail -1 > ghc-path
+  A: echo exec $(cat ghc-path) '"$@"' > ghc.exe ; chmod +x ghc.exe
+  A: echo 'import Top' > main.hs
+  A: ./ghc.exe -M *.hs -dep-makefile depends
+  A: ./ghc.exe -c A.hs
+  A: ./ghc.exe -c C.hs
+  A: ./ghc.exe -c B.hs
+  A: ./ghc.exe -c Top.hs
+  A: ./ghc.exe -c main.hs
+  A: ./ghc.exe -o diamond.exe main.o Top.o B.o C.o A.o
   ran 10 actions
 
   $ ,jenga/example/diamond.exe
