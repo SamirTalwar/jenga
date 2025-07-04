@@ -1,4 +1,4 @@
-module ElabSimpleMake (elab) where -- TODO: rename loose prefix "Elab" -- add banner comment
+module SimpleMake (elab) where
 
 import Data.List.Split (splitOn)
 import Data.Set ((\\))

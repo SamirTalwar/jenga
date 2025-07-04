@@ -1,7 +1,7 @@
 module UserMain (main) where
 
 import Control.Monad (forM_)
-import ElabSimpleMake qualified (elab)
+import SimpleMake qualified (elab)
 import Engine (engineMain)
 import Interface (G(..),Key(..),Loc(..))
 import StdBuildUtils (listBaseNamesWithSuffix)
@@ -22,7 +22,7 @@ dispatchAllConfigs dir = do
   configNames <- listBaseNamesWithSuffix dir ".jenga"
   forM_ configNames $ \(Loc fullName) -> do
     let config = Key (Loc (fullName ++ ".jenga"))
-    ElabSimpleMake.elab config
+    SimpleMake.elab config
 
 
 findStartingPointsFromTopLoc :: String -> G [Loc]
