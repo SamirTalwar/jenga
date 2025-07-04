@@ -11,6 +11,7 @@ data Config = Config
   , localCache :: Bool
   , keepSandBoxes :: Bool
   , materializeAll :: Bool
+  , reverseDepsOrder :: Bool -- experiment for concurent jengas
   , args :: [FilePath]
   , mode :: Mode
   } deriving Show
@@ -31,8 +32,10 @@ subCommands = hsubparser
 
 -- TODO: allow multiple setting of flags: -a -a
 buildCommand :: Parser Config
-buildCommand = Config <$> e <*> b <*> a <*> x <*> i <*> c <*> k <*> m <*> args <*> mode
+buildCommand =
+  Config <$> e <*> b <*> a <*> x <*> i <*> c <*> k <*> m <*> r <*> args <*> mode
   where
+    -- TODO: consider removing the less useful short names
     e = switch (short 'e' <> help "Log steps for elaboration of targets and artifacts")
     b = switch (short 'b' <> help "Log steps for bringing a build up to date")
     a = switch (short 'a' <> help "Log execution of user build commands")
@@ -44,6 +47,10 @@ buildCommand = Config <$> e <*> b <*> a <*> x <*> i <*> c <*> k <*> m <*> args <
                 <> help "Keep all sandboxes when build completes")
     m = switch (short 'm' <> long "materialize-all"
                 <> help "Materialize all targets; not just declared artifacts")
+
+    r = switch (long "reverse"
+                <> help "Build dependencies in reverse order; experiment for concurrent jenga")
+
     args = many (strArgument (metavar "DIRS"
                               <> help "directories containing build rules"))
 

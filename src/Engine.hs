@@ -80,14 +80,15 @@ pluralize n what = printf "%d %s%s" n what (if n == 1 then "" else "s")
 
 
 buildWithSystem :: Config -> System -> B ()
-buildWithSystem config@Config{materializeAll} system = do
+buildWithSystem config@Config{materializeAll,reverseDepsOrder} system = do
   reportSystem system
   let System{artifacts,how} = system
   let allTargets = Map.keys how
   BLog $ printf "materalizing %s"
     (if materializeAll then "all targets" else (pluralize (length artifacts) "artifact"))
   let whatToBuild = if materializeAll then allTargets else artifacts
-  mapM_ (buildAndMaterialize config how) whatToBuild
+  mapM_ (buildAndMaterialize config how)
+    (if reverseDepsOrder then reverse whatToBuild else whatToBuild)
 
 reportSystem :: System -> B ()
 reportSystem system = do
@@ -213,13 +214,13 @@ locateKey (Key (Loc fp)) = Loc (FP.takeFileName fp)
 -- Build
 
 doBuild :: Config -> How -> Key -> B Checksum
-doBuild config@Config{seeB} how key = demand key
+doBuild config@Config{seeB,reverseDepsOrder} how key = demand key
   where
     log :: String -> B ()
     log mes = when seeB $ BLog (printf "B: %s" mes)
 
     -- TODO: detect & error on build cycles
-    demand :: Key -> B Checksum
+    demand :: Key -> B Checksum -- TODO: inline demand/demand1
     demand sought = do
       BGetKey sought >>= \case
         Just sum -> pure sum
@@ -245,7 +246,9 @@ doBuild config@Config{seeB} how key = demand key
         Just rule -> do
           log $ printf "Consult: %s" (show rule)
           let Rule{depcom} = rule
-          (deps,action) <- gatherDeps config how depcom
+          (deps0,action) <- gatherDeps config how depcom
+
+          let deps = if reverseDepsOrder then reverse deps0 else deps0
 
           wdeps <- (WitMap . Map.fromList) <$>
             sequence [ do checksum <- demand dep; pure (locateKey dep,checksum)
@@ -256,6 +259,7 @@ doBuild config@Config{seeB} how key = demand key
           wks <- hashWitnessKey witKey
           verifyWitness sought wks >>= \case
             Just checksum -> do
+              --let Bash command = action in BLog $ printf "NOT RUNNING: %s" command -- debug
               pure checksum
 
             Nothing -> do
