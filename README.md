@@ -30,7 +30,7 @@ between [UserMain](src/UserMain.hs) and the [Engine](src/Engine.hs).
 Things to try:
 
 - Build from empty cache: `rm -rf .cache; stack run -- -a`
-- Flags to increase logging: `stack run -- -e -b -a -x`
+- Flags to increase logging: `stack run -- -v -x -i`
 - See the cache and artifacts: `find .cache ,jenga`
 - Run built artifact: `,jenga/artifacts/example/main.exe`
 - See the build witnesses: `cat .cache/traces/*`

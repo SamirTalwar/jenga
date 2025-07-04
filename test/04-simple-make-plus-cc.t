@@ -13,7 +13,7 @@
   ./example/README
   ./example/build.jenga
 
-  $ ./jenga.exe build -c. -a
+  $ ./jenga.exe build -c.
   elaborated 6 rules and 6 targets
   materalizing 2 artifacts
   A: gcc -MG -MM fib.c -MF fib.d

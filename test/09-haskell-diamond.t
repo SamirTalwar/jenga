@@ -2,7 +2,7 @@
   $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
   $ cp -rp $TESTDIR/example-09-haskell-diamond example
 
-  $ ./jenga.exe build -c. -a
+  $ ./jenga.exe build -c.
   elaborated 9 rules and 13 targets
   materalizing 1 artifact
   A: find $HOME/.stack | grep -v lib | grep bin/ghc$ | sort -n | tail -1 > ghc-path
@@ -19,7 +19,9 @@
   $ ,jenga/example/diamond.exe
   Top[B[A],C[A]]
 
-  $ ./jenga.exe build -c. -b | grep Require
+  $ ./jenga.exe build -c. -v
+  elaborated 9 rules and 13 targets
+  materalizing 1 artifact
   B: Require: example/diamond.exe
   B: Require: example/ghc.exe
   B: Require: example/ghc-path

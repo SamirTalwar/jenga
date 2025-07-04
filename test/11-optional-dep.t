@@ -3,7 +3,7 @@
   $ cp -rp $TESTDIR/example-11-optional-dep example
 
 Build:
-  $ ./jenga.exe build -c. -a
+  $ ./jenga.exe build -c.
   elaborated 2 rules and 2 targets
   materalizing 1 artifact
   A: gcc -c $(test -f CFLAGS && cat CFLAGS) main.c
@@ -11,13 +11,13 @@ Build:
   ran 2 actions
 
 Zero build:
-  $ ./jenga.exe build -c. -a
+  $ ./jenga.exe build -c.
   elaborated 2 rules and 2 targets
   materalizing 1 artifact
 
 Define CFLAGS; rebuilds:
   $ echo '-O2' > example/CFLAGS
-  $ ./jenga.exe build -c. -a
+  $ ./jenga.exe build -c.
   elaborated 2 rules and 2 targets
   materalizing 1 artifact
   A: gcc -c $(test -f CFLAGS && cat CFLAGS) main.c
@@ -26,7 +26,7 @@ Define CFLAGS; rebuilds:
 
 Change CFLAGS; rebuilds:
   $ echo '-Wall' > example/CFLAGS
-  $ ./jenga.exe build -c. -a
+  $ ./jenga.exe build -c.
   elaborated 2 rules and 2 targets
   materalizing 1 artifact
   A: gcc -c $(test -f CFLAGS && cat CFLAGS) main.c
@@ -37,6 +37,6 @@ Change CFLAGS; rebuilds:
 
 Remove CFLAGS; reuse original build:
   $ rm example/CFLAGS
-  $ ./jenga.exe build -c. -a
+  $ ./jenga.exe build -c.
   elaborated 2 rules and 2 targets
   materalizing 1 artifact

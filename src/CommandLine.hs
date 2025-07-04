@@ -1,22 +1,22 @@
-module CommandLine (Config(..),Mode(..),exec) where
+module CommandLine (LogMode(..),Config(..),BuildMode(..),exec) where
 
 import Options.Applicative
 
--- TODO: maybe simplify loging verbosity: -v (A + count info) -vv (EBX) -vvv (I)
+data LogMode = LogQuiet | LogNormal | LogVerbose
+
 data Config = Config
-  { seeA :: Bool
-  , seeB :: Bool
+  { logMode :: LogMode
   , seeX :: Bool
   , seeI :: Bool
-  , cacheParentOverride :: Maybe String -- Nothing means use default in $HOME
+  , cacheParentOverride :: Maybe String -- Nothing: means use default in $HOME
   , keepSandBoxes :: Bool
   , materializeAll :: Bool
   , reverseDepsOrder :: Bool -- experiment for concurent jengas
   , args :: [FilePath]
-  , mode :: Mode
-  } deriving Show
+  , buildMode :: BuildMode
+  }
 
-data Mode = ModeBuild | ModeListTargets | ModeListRules deriving Show
+data BuildMode = ModeBuild | ModeListTargets | ModeListRules
 
 exec :: IO Config
 exec = customExecParser
@@ -30,11 +30,18 @@ subCommands = hsubparser
     (info buildCommand
       (progDesc "Bring a build up to date")))
 
--- TODO: remove 'a' and 'b' with verbosity levels
 buildCommand :: Parser Config
 buildCommand = Config
-  <$> switch (short 'a' <> help "Log execution of user build commands")
-  <*> switch (short 'b' <> help "Log required keys when bringing a build up to date")
+  <$>
+  (
+    flag' LogVerbose
+    (short 'v' <> help "Log build-targets checked")
+    <|>
+    flag' LogQuiet
+    (short 'q' <> help "Build quietly, except for errors")
+    <|>
+    pure LogNormal -- see user actions + counts
+  )
   <*> switch (short 'x' <> help "Log execution of externally run commands")
   <*> switch (short 'i' <> help "Log execution of internal file system access")
   <*> (

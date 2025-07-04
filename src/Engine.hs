@@ -1,6 +1,6 @@
 module Engine (engineMain) where
 
-import CommandLine (Config(..),Mode(..))
+import CommandLine (LogMode(..),Config(..),BuildMode(..))
 import CommandLine qualified (exec)
 import Control.Monad (ap,liftM)
 import Control.Monad (when)
@@ -33,21 +33,21 @@ engineMain userProg = do
       Nothing -> Loc <$> getHomeDirectory
       Just dir -> pure (Loc dir)
   let cacheDir = cacheDirParent </> ".cache/jenga"
- -- printf "cache = %s\n" (show cacheDir) -- TODO: maybe on a verbose mode
+ -- printf "cache = %s\n" (show cacheDir)
   myPid <- getCurrentPid
   i <- runB myPid cacheDir config $ do
     initDirs
     elaborateAndBuild config userProg
   when (i>0) $ do
-    printf "ran %s\n" (pluralize i "action") -- TODO: only when verbose?
+    printf "ran %s\n" (pluralize i "action")
 
 elaborateAndBuild :: Config -> UserProg -> B ()
-elaborateAndBuild config@Config{mode,args} userProg =
+elaborateAndBuild config@Config{buildMode,args} userProg =
     runElaboration config (userProg args) >>= \case
       Left mes -> do
         BLog $ printf "go -> Error:\n%s\n" (show mes)
       Right system -> do
-        case mode of
+        case buildMode of
           ModeBuild -> do
             buildWithSystem config system
           ModeListTargets -> do
@@ -94,7 +94,7 @@ buildWithSystem config@Config{materializeAll,reverseDepsOrder} system = do
   mapM_ (buildAndMaterialize config how)
     (if reverseDepsOrder then reverse whatToBuild else whatToBuild)
 
-reportSystem :: System -> B () -- TODO: only when verbose?
+reportSystem :: System -> B ()
 reportSystem system = do
   let System{rules,how} = system
   BLog $ printf "elaborated %s and %s"
@@ -211,10 +211,12 @@ locateKey (Key (Loc fp)) = Loc (FP.takeFileName fp)
 -- Build
 
 doBuild :: Config -> How -> Key -> B Checksum
-doBuild config@Config{seeB,reverseDepsOrder} how key = demand key
+doBuild config@Config{logMode,reverseDepsOrder} how key = demand key
   where
+    seeV = case logMode of LogVerbose -> True; _ -> False
+
     log :: String -> B ()
-    log mes = when seeB $ BLog (printf "B: %s" mes)
+    log mes = when seeV $ BLog (printf "B: %s" mes)
 
     -- TODO: detect & error on build cycles
     demand :: Key -> B Checksum -- TODO: inline demand/demand1
@@ -570,13 +572,13 @@ data X a where
   XRemoveDirRecursive :: Loc -> X ()
 
 runX :: Config -> X a -> IO a
-runX Config{seeA,seeX,seeI} = loop
+runX Config{logMode,seeX,seeI} = loop
   where
-    logA,logX,logI,_logD :: String -> IO ()
-    logA mes = when seeA $ printf "A: %s\n" mes -- TODO verbose mode?
+    seeA = case logMode of LogQuiet -> False; _ -> True
+    logA,logX,logI :: String -> IO ()
+    logA mes = when seeA $ printf "A: %s\n" mes
     logX mes = when seeX $ printf "X: %s\n" mes
     logI mes = when seeI $ printf "I: %s\n" mes
-    _logD mes = printf "D: %s\n" mes
 
     loop :: X a -> IO a
     loop x = case x of
