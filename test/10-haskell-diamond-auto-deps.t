@@ -21,16 +21,11 @@
   Top[B[A],C[A]]
 
   $ ./jenga.exe build -c. -b | grep Require
-  B: Require: example/build.jenga
   B: Require: example/main.hi
   B: Require: example/depends
   B: Require: example/ghc.exe
   B: Require: example/ghc-path
   B: Require: example/main.hs
-  B: Require: example/A.hs
-  B: Require: example/B.hs
-  B: Require: example/C.hs
-  B: Require: example/Top.hs
   B: Require: example/Top.hi
   B: Require: example/C.hi
   B: Require: example/A.hi

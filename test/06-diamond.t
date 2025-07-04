@@ -19,8 +19,9 @@
 The example has a diamond dependency on target 'b', reached via 'ab' and 'bc'.
 During any build (incuding a zero-rebuild) we should require 'b' more than once.
 
-  $ ./jenga.exe build -c. -b | grep Require
-  B: Require: example/build.jenga
+  $ ./jenga.exe build -c. -b
+  elaborated 6 rules and 6 targets
+  materalizing 1 artifact
   B: Require: example/top
   B: Require: example/ab
   B: Require: example/a

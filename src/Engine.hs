@@ -150,7 +150,7 @@ data System = System { artifacts :: [Key], rules :: [Rule], how :: How }
 type How = Map Key Rule
 
 runElaboration :: Config -> G () -> B (OrErr System)
-runElaboration config@Config{seeE} m = loop m system0 k0
+runElaboration config@Config{seeE=_} m = loop m system0 k0
   where
     system0 :: System
     system0 = System { rules = [], artifacts = [], how = Map.empty }
@@ -158,8 +158,8 @@ runElaboration config@Config{seeE} m = loop m system0 k0
     k0 :: System -> () -> B (OrErr System)
     k0 s () = pure (Right s)
 
-    logE :: String -> B ()
-    logE mes = when seeE $ BLog (printf "E: %s" mes)
+    --logE :: String -> B ()
+    --logE mes = when seeE $ BLog (printf "E: %s" mes)
 
     loop :: G a -> System -> (System -> a -> B (OrErr System)) -> B (OrErr System)
     loop m system k = case m of
@@ -171,7 +171,7 @@ runElaboration config@Config{seeE} m = loop m system0 k0
       GFail mes -> pure (Left (ErrMessage mes)) -- ignore k
       GRule rule -> do
         let Rule{targets} = rule
-        logE $ printf "Elaborate rule: %s" (show rule)
+        --logE $ printf "Elaborate rule: %s" (show rule)
         xs <- sequence [ do b <- Execute (XFileExists loc); pure (key,b)
                         | key@(Key loc) <- targets ]
         case [ key | (key,isSource) <- xs, isSource ] of
@@ -232,7 +232,7 @@ doBuild config@Config{seeB,reverseDepsOrder} how key = demand key
 
     demand1 :: Key -> B Checksum
     demand1 sought = do
-      log $ printf "Require: %s" (show sought)
+      --log $ printf "Require: %s" (show sought) -- too noisy to see when it is source?
       case Map.lookup sought how of
         Nothing -> do
           let Key loc = sought
@@ -245,7 +245,8 @@ doBuild config@Config{seeB,reverseDepsOrder} how key = demand key
 
         -- TODO: document this flow...
         Just rule -> do
-          log $ printf "Consult: %s" (show rule)
+          log $ printf "Require: %s" (show sought)
+          --log $ printf "Consult: %s" (show rule)
           let Rule{depcom} = rule
           (deps0,action) <- gatherDeps config how depcom
 
@@ -264,7 +265,7 @@ doBuild config@Config{seeB,reverseDepsOrder} how key = demand key
               pure checksum
 
             Nothing -> do
-              log $ printf "Execute: %s" (show rule)
+              --log $ printf "Execute: %s" (show rule)
               wtargets <- buildWithRule config action wdeps rule
               let val = WitnessValue { wtargets }
               let wit = Witness { key = witKey, val }
