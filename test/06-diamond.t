@@ -2,7 +2,7 @@
   $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
   $ cp -rp $TESTDIR/example-06-diamond example
 
-  $ ./jenga.exe build --local-cache -a
+  $ ./jenga.exe build -c. -a
   elaborated 6 rules and 6 targets
   materalizing 1 artifact
   A: echo -n A > a
@@ -19,7 +19,7 @@
 The example has a diamond dependency on target 'b', reached via 'ab' and 'bc'.
 During any build (incuding a zero-rebuild) we should require 'b' more than once.
 
-  $ ./jenga.exe build --local-cache -b | grep Require
+  $ ./jenga.exe build -c. -b | grep Require
   B: Require: example/build.jenga
   B: Require: example/top
   B: Require: example/ab

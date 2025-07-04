@@ -16,7 +16,7 @@ What have I got?
 
 Build from clean:
 
-  $ ./jenga.exe build --local-cache -a
+  $ ./jenga.exe build --cache=. -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   A: gcc -c fib.c -o fib.o
@@ -38,13 +38,13 @@ Run the built artifact:
 
 Rebuild after no changes:
 
-  $ ./jenga.exe build --local-cache -a
+  $ ./jenga.exe build -c. -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
 
 Add '-x' flag for a more detailed logging.
 
-  $ ./jenga.exe build --local-cache -ax
+  $ ./jenga.exe build -c. -ax
   X: md5sum example/build.jenga
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
@@ -54,7 +54,7 @@ Add '-x' flag for a more detailed logging.
 Add '-xi flags for very detailed logging. Test will be fragile to any change in example source.
 We take care to mask any pids referenced by sanboxes
 
-  $ ./jenga.exe build --local-cache -axi | sed 's|jbox/[0-9]*|jbox/$$|'
+  $ ./jenga.exe build -c. -axi | sed 's|jbox/[0-9]*|jbox/$$|'
   I: rm -rf ,jenga
   I: mkdir -p .cache/jenga/files
   I: mkdir -p .cache/jenga/traces
@@ -106,7 +106,7 @@ We take care to mask any pids referenced by sanboxes
 Update main.c "world->UNIVERSE" and rerun:
 
   $ sed -i 's/world/UNIVERSE/g' example/main.c
-  $ ./jenga.exe build --local-cache -a
+  $ ./jenga.exe build -c. -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   A: gcc -c main.c -o main.o
@@ -118,7 +118,7 @@ Update main.c "world->UNIVERSE" and rerun:
 Reverting to previous state of main.c causes no rebuilding:
 
   $ sed -i 's/UNIVERSE/world/g' example/main.c
-  $ ./jenga.exe build --local-cache -a
+  $ ./jenga.exe build -c. -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   $ ,jenga/example/main.exe
@@ -127,7 +127,7 @@ Reverting to previous state of main.c causes no rebuilding:
 Whitespace only change to main.c cause no link step (early cutoff):
 
   $ sed -i 's/int main/int      main/g' example/main.c
-  $ ./jenga.exe build --local-cache -a
+  $ ./jenga.exe build -c. -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   A: gcc -c main.c -o main.o
@@ -136,7 +136,7 @@ Whitespace only change to main.c cause no link step (early cutoff):
 Update build rules to link executable under a different name:
 
   $ sed -i 's/main.exe/RENAMED.exe/' example/build.jenga
-  $ ./jenga.exe build --local-cache -a
+  $ ./jenga.exe build -c. -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   A: gcc fib.o main.o -o RENAMED.exe
@@ -153,7 +153,7 @@ Update build rules to link executable under a different name:
 Relocate the example to a new directory; no rebuilds:
 
   $ mv example RELOCATED
-  $ ./jenga.exe build --local-cache -a
+  $ ./jenga.exe build -c. -a
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
 
@@ -165,7 +165,7 @@ Relocate the example to a new directory; no rebuilds:
 Duplicate the example directory; double elaborated rules; still no rebuilds:
 
   $ cp -rp RELOCATED ANOTHER
-  $ ./jenga.exe build --local-cache -a
+  $ ./jenga.exe build -c. -a
   elaborated 6 rules and 6 targets
   materalizing 2 artifacts
 
@@ -179,7 +179,7 @@ Duplicate the example directory; double elaborated rules; still no rebuilds:
 Modify code in one of the example directories; minimal rebuild as required:
 
   $ sed -i 's/fib(10)/fib(20)/g' RELOCATED/main.c
-  $ ./jenga.exe build --local-cache -a
+  $ ./jenga.exe build -c. -a
   elaborated 6 rules and 6 targets
   materalizing 2 artifacts
   A: gcc -c main.c -o main.o
@@ -195,7 +195,7 @@ Run the two versions:
 
 Materalize all targets:
 
-  $ ./jenga.exe build --local-cache -m
+  $ ./jenga.exe build -c. -m
   elaborated 6 rules and 6 targets
   materalizing all targets
 
@@ -212,7 +212,7 @@ Materalize all targets:
 
 Materalize just artifacts:
 
-  $ ./jenga.exe build --local-cache
+  $ ./jenga.exe build -c.
   elaborated 6 rules and 6 targets
   materalizing 2 artifacts
 

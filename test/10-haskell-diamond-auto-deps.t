@@ -2,7 +2,7 @@
   $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
   $ cp -rp $TESTDIR/example-10-haskell-diamond-auto-deps example
 
-  $ ./jenga.exe build --local-cache -a
+  $ ./jenga.exe build -c. -a
   elaborated 10 rules and 15 targets
   materalizing 6 artifacts
   A: find $HOME/.stack | grep -v lib | grep bin/ghc$ | sort -n | tail -1 > ghc-path
@@ -20,7 +20,7 @@
   $ ,jenga/example/diamond.exe
   Top[B[A],C[A]]
 
-  $ ./jenga.exe build --local-cache -b | grep Require
+  $ ./jenga.exe build -c. -b | grep Require
   B: Require: example/build.jenga
   B: Require: example/main.hi
   B: Require: example/depends

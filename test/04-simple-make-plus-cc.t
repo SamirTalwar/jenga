@@ -13,7 +13,7 @@
   ./example/README
   ./example/build.jenga
 
-  $ ./jenga.exe build --local-cache -a
+  $ ./jenga.exe build -c. -a
   elaborated 6 rules and 6 targets
   materalizing 2 artifacts
   A: gcc -MG -MM fib.c -MF fib.d

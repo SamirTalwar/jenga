@@ -2,13 +2,14 @@ module CommandLine (Config(..),Mode(..),exec) where
 
 import Options.Applicative
 
+-- TODO: maybe simplify loging verbosity: -v (A + count info) -vv (EBX) -vvv (I)
 data Config = Config
   { seeE :: Bool
   , seeB :: Bool
   , seeA :: Bool
   , seeX :: Bool
   , seeI :: Bool
-  , localCache :: Bool
+  , cacheParentOverride :: Maybe String -- Nothing means use default in $HOME
   , keepSandBoxes :: Bool
   , materializeAll :: Bool
   , reverseDepsOrder :: Bool -- experiment for concurent jengas
@@ -41,8 +42,15 @@ buildCommand =
     a = switch (short 'a' <> help "Log execution of user build commands")
     x = switch (short 'x' <> help "Log execution of externally run commands")
     i = switch (short 'i' <> help "Log execution of internal file system access")
-    c = switch (long "local-cache"
-                <> help "Use local .cache instead of shared cache at $HOME/.cache/jenga")
+
+    c =
+      Just <$> strOption
+      (short 'c' <> long "cache" <> metavar "DIR"
+        <> help "Use .cache/jenga in DIR instead of $HOME"
+      )
+      <|>
+      pure Nothing
+
     k = switch (short 'k' <> long "keep-sandboxes"
                 <> help "Keep all sandboxes when build completes")
     m = switch (short 'm' <> long "materialize-all"

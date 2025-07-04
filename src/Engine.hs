@@ -27,16 +27,19 @@ type UserProg = [String] -> G ()
 
 engineMain :: UserProg -> IO ()
 engineMain userProg = do
-  config@Config{localCache} <- CommandLine.exec
-  cacheDir <- if localCache then pure (Loc ".cache/jenga") else do
-    home <- Loc <$> getHomeDirectory
-    pure (home </> ".cache/jenga")
+  config@Config{cacheParentOverride} <- CommandLine.exec
+  cacheDirParent <-
+    case cacheParentOverride of
+      Nothing -> Loc <$> getHomeDirectory
+      Just dir -> pure (Loc dir)
+  let cacheDir = cacheDirParent </> ".cache/jenga"
+ -- printf "cache = %s\n" (show cacheDir) -- TODO: maybe on a verbose mode
   myPid <- getCurrentPid
   i <- runB myPid cacheDir config $ do
     initDirs
     elaborateAndBuild config userProg
   when (i>0) $ do
-    printf "ran %s\n" (pluralize i "action")
+    printf "ran %s\n" (pluralize i "action") -- TODO: only when verbose?
 
 elaborateAndBuild :: Config -> UserProg -> B ()
 elaborateAndBuild config@Config{mode,args} userProg =
@@ -91,7 +94,7 @@ buildWithSystem config@Config{materializeAll,reverseDepsOrder} system = do
   mapM_ (buildAndMaterialize config how)
     (if reverseDepsOrder then reverse whatToBuild else whatToBuild)
 
-reportSystem :: System -> B ()
+reportSystem :: System -> B () -- TODO: only when verbose?
 reportSystem system = do
   let System{rules,how} = system
   BLog $ printf "elaborated %s and %s"
@@ -573,7 +576,7 @@ runX :: Config -> X a -> IO a
 runX Config{seeA,seeX,seeI} = loop
   where
     logA,logX,logI,_logD :: String -> IO ()
-    logA mes = when seeA $ printf "A: %s\n" mes
+    logA mes = when seeA $ printf "A: %s\n" mes -- TODO verbose mode?
     logX mes = when seeX $ printf "X: %s\n" mes
     logI mes = when seeI $ printf "I: %s\n" mes
     _logD mes = printf "D: %s\n" mes

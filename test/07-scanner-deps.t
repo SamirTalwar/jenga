@@ -3,7 +3,7 @@
   $ cp -rp $TESTDIR/example-07-scanner-deps example
 
 Initial build
-  $ ./jenga.exe build --local-cache -am
+  $ ./jenga.exe build -c. -am
   elaborated 5 rules and 5 targets
   materalizing all targets
   A: gcc -MG -MM fib.c > fib.d
@@ -23,7 +23,7 @@ Inspect the generated deps
   fib.o: fib.c fib.h
 
   $ echo '#define MY_CONST 11' > example/defs.h
-  $ ./jenga.exe build --local-cache -a
+  $ ./jenga.exe build -c. -a
   elaborated 5 rules and 5 targets
   materalizing 1 artifact
   A: gcc -c main.c -o main.o
