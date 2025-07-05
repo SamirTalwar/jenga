@@ -2,8 +2,11 @@ module Engine (engineMain) where
 
 import CommandLine (LogMode(..),Config(..),BuildMode(..))
 import CommandLine qualified (exec)
+import Control.Exception (try,SomeException)
 import Control.Monad (ap,liftM)
 import Control.Monad (when)
+import Data.HMap (HMap)
+import Data.HMap qualified as HMap (empty,createKey,lookup,insert)
 import Data.Hash.MD5 qualified as MD5
 import Data.List (intercalate)
 import Data.List qualified as List (foldl')
@@ -18,7 +21,6 @@ import System.FilePath qualified as FP
 import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode,getFileStatus,isDirectory)
 import System.Process (shell,readCreateProcess,readCreateProcessWithExitCode,Pid,getCurrentPid)
 import Text.Printf (printf)
-import Control.Exception (try,SomeException)
 
 ----------------------------------------------------------------------
 -- Engine main
@@ -91,8 +93,10 @@ buildWithSystem config@Config{materializeAll,reverseDepsOrder} system = do
   BLog $ printf "materalizing %s"
     (if materializeAll then "all targets" else (pluralize (length artifacts) "artifact"))
   let whatToBuild = if materializeAll then allTargets else artifacts
-  mapM_ (buildAndMaterialize config how)
-    (if reverseDepsOrder then reverse whatToBuild else whatToBuild)
+  _ :: [()] <- parallel [ buildAndMaterialize config how key
+                        | key <- (if reverseDepsOrder then reverse whatToBuild else whatToBuild)
+                        ]
+  pure ()
 
 reportSystem :: System -> B ()
 reportSystem system = do
@@ -251,7 +255,7 @@ doBuild config@Config{logMode,reverseDepsOrder} how key = demand key
           let deps = if reverseDepsOrder then reverse deps0 else deps0
 
           wdeps <- (WitMap . Map.fromList) <$>
-            sequence [ do checksum <- demand dep; pure (locateKey dep,checksum)
+            parallel [ do checksum <- demand dep; pure (locateKey dep,checksum)
                      | dep <- deps
                      ]
 
@@ -313,13 +317,14 @@ buildWithRule Config{keepSandBoxes} action depWit rule = do
   let Rule{targets} = rule
   Execute (XMakeDir sandbox)
   setupInputs sandbox depWit
-  Execute (XRunActionInDir sandbox action) >>= \case
+  exploreYield (Execute (XRunActionInDir sandbox action)) >>= \case
     False ->
       error (printf "user action failed for rule: '%s'" (show rule))
     True -> do
       targetWit <- cacheOutputs sandbox targets
       when (not keepSandBoxes) $ Execute (XRemoveDirRecursive sandbox)
       pure targetWit
+
 
 setupInputs :: Loc -> WitMap -> B ()
 setupInputs sandbox (WitMap m1) = do
@@ -490,6 +495,12 @@ fromQ WIT{command,deps,targets} = do
 ----------------------------------------------------------------------
 -- B: build monad
 
+parallel :: [B a] -> B [a]
+parallel = \case
+  [] -> pure []
+  [p] -> (\x->[x]) <$> p
+  p:ps -> (\(x,xs) -> x:xs) <$> BPar p (parallel ps)
+
 instance Functor B where fmap = liftM
 instance Applicative B where pure = BRet; (<*>) = ap
 instance Monad B where (>>=) = BBind
@@ -503,6 +514,8 @@ data B a where -- TODO: BFail?
   Execute :: X a -> B a
   BGetKey :: Key -> B (Maybe Checksum)
   BSetKey :: Key -> Checksum -> B ()
+  BPar :: B a -> B b -> B (a,b)
+  BYield :: B ()
 
 runB :: Pid -> Loc -> Config -> B () -> IO Int
 runB myPid cacheDir config@Config{keepSandBoxes} b = runX config $ do
@@ -515,7 +528,7 @@ runB myPid cacheDir config@Config{keepSandBoxes} b = runX config $ do
     -- Not the end of the day, but we could be cleaner.
     sandboxParentDirForThisProcess = Loc (printf "/tmp/.jbox/%s" (show myPid))
 
-    state0 = BState { sandboxCounter = 0, memo = Map.empty }
+    state0 = BState { sandboxCounter = 0, memo = Map.empty, active = [], blocked = [], hmap = HMap.empty }
 
     k0 :: BState -> () -> X Int
     k0 BState{sandboxCounter=i} () = do
@@ -537,12 +550,61 @@ runB myPid cacheDir config@Config{keepSandBoxes} b = runX config $ do
         case Map.lookup key memo of
           Nothing -> k s Nothing
           Just sum -> k s (Just sum)
-
       BSetKey key sum -> do
         let BState{memo} = s
         k s { memo = Map.insert key sum memo } ()
 
-data BState = BState { sandboxCounter :: Int, memo :: Map Key Checksum }
+      BPar a b -> do
+        keyA <- XIO HMap.createKey
+        keyB <- XIO HMap.createKey
+        let
+          kA s a = do
+            let BState{hmap} = s
+            case HMap.lookup keyB hmap of
+              Just b -> k s (a,b)
+              Nothing -> next s { hmap = HMap.insert keyA a hmap }
+        let
+          kB s b = do
+            let BState{hmap} = s
+            case HMap.lookup keyA hmap of
+              Just a -> k s (a,b)
+              Nothing -> next s { hmap = HMap.insert keyB b hmap }
+
+        loop a s { active = BJob b kB : active s } kA
+
+      BYield -> do
+        let BState{blocked} = s
+        let me = BJob (pure ()) k
+        next s { blocked = me : blocked }
+
+    next :: BState -> X Int
+    next s@BState{active,blocked} = do
+      --XLog (printf "next: %d/%d" (length active) (length blocked))
+      case active of
+        j:active -> resume j s { active }
+        [] -> case blocked of
+          [] -> error "next: no more jobs"
+          blocked -> do
+            next s { active = reverse blocked, blocked = [] }
+
+    resume :: BJob -> BState -> X Int
+    resume (BJob p k) s = loop p s k
+
+exploreYield :: B a -> B a
+exploreYield build = do
+  --BYield -- TODO: not working right yet! -- runs 185 action instead of 47. lost memoization?
+  build
+
+data BState = BState
+  { sandboxCounter :: Int
+  , memo :: Map Key Checksum
+  , active :: [BJob]
+  , blocked :: [BJob]
+  , hmap :: HMap
+  }
+
+data BJob where
+  BJob :: B a -> (BState -> a -> X Int) -> BJob
 
 ----------------------------------------------------------------------
 -- X: execution monad
@@ -555,6 +617,7 @@ data X a where
   XRet :: a -> X a
   XBind :: X a -> (a -> X b) -> X b
   XLog :: String -> X ()
+  XIO :: IO a -> X a
 
   XRunActionInDir :: Loc -> Action -> X Bool
   XMd5sum :: Loc -> X Checksum
@@ -584,6 +647,7 @@ runX Config{logMode,seeX,seeI} = loop
     loop x = case x of
       XRet a -> pure a
       XBind m f -> do a <- loop m; loop (f a)
+      XIO io -> io
       XLog s -> do putStrLn s
 
       -- sandboxed execution of user's action; for now always a bash command
@@ -606,7 +670,7 @@ runX Config{logMode,seeX,seeI} = loop
         let command = printf "md5sum %s" fp
         logX command
         output <- readCreateProcess (shell command) ""
-        let sum = case (splitOn " " output) of [] -> undefined; x:_ -> x
+        let sum = case (splitOn " " output) of [] -> error "XMd5sum/split"; x:_ -> x
         pure (Checksum sum)
 
       -- internal file system access (log approx equivalent external command)
