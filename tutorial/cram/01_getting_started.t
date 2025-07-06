@@ -21,7 +21,7 @@ Build. See one build action.
   $ jenga build
   elaborated 1 rule and 1 target
   materalizing 1 artifact
-  A: gcc main.c -o hello.exe
+  A: gcc -o hello.exe main.c
   ran 1 action
 
 Zero rebuild. See no build actions.
@@ -41,7 +41,7 @@ Modify file and rebuild. See the rebuild action, and the changed output.
   $ jenga build; ,jenga/hello.exe
   elaborated 1 rule and 1 target
   materalizing 1 artifact
-  A: gcc main.c -o hello.exe
+  A: gcc -o hello.exe main.c
   ran 1 action
   Hello, jenga universe!
 

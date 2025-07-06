@@ -1,4 +1,5 @@
 #include <stdio.h>
+int fib(int);
 void main() { // Oops! main should be declared to return int.
-  printf("Hello, buggy main!\n");
+  printf("Hello, %d jenga!\n", fib(10));
 }

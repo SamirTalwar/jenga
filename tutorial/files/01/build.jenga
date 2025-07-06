@@ -1,3 +1,3 @@
 
 hello.exe : main.c
-  gcc main.c -o hello.exe
+  gcc -o hello.exe main.c

@@ -43,9 +43,22 @@ int main() {
 And here's our single build rule in the file `build.jenga`.
 ```
 hello.exe : main.c
-  gcc main.c -o hello.exe
+  gcc -o hello.exe main.c
 ```
 
+This rule says that the _target_ `hello.exe` depends (`:`) on the source file `main.c`
+And to create the output target from its input, we run the specfic compilation _action_
+`gcc -o hello.exe main.c`
+
+Note the action must be indented from the preceeding line.
+This follow the syntax used by `make`.
+The action will be passed to `bash` for execution.
+
+In general the format of a simple rule in `.jenga` file is:
+```
+LIST-OF-TARGETS : LIST-OF-DEPENDENCIES
+  ACTION
+```
 Let's work in a fresh directory to try this out.
 First type or copy in the example files.
 Then run `jenga build` in the new directory.
