@@ -11,8 +11,6 @@ Avoiding interference from the global cache, which will make this test non-deter
   $ chmod +x jenga
   $ export PATH=.:$PATH
 
-## More rules
-
 Get the example.
 
   $ cp -rp $TESTDIR/../files/02/build.jenga .
@@ -39,9 +37,9 @@ Running executable returns exit code 17
   Hello, 55 jenga!
   [17]
 
-Add -Wall
+Add -Wall to both compile rule. Two actions get rerun.
 
-  $ sed -i 's/-c -o main.o/-c -Wall -o main.o/' build.jenga
+  $ sed -i 's/-c/-c -Wall/' build.jenga
   $ cat build.jenga
   
   hello.exe : main.o fib.o
@@ -51,7 +49,8 @@ Add -Wall
     gcc -c -Wall -o main.o main.c
   
   fib.o : fib.c
-    gcc -c -o fib.o fib.c
+    gcc -c -Wall -o fib.o fib.c
+
   $ jenga build
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
@@ -59,31 +58,11 @@ Add -Wall
   main.c:3:6: warning: return type of 'main' is not 'int' [-Wmain]
       3 | void main() { // Oops! main should be declared to return int.
         |      ^~~~
-  ran 1 action
+  A: gcc -c -Wall -o fib.o fib.c
+  ran 2 actions
 
-Add -Werror to force build failure
-  $ sed -i 's/-Wall/-Wall -Werror/' build.jenga
-  $ jenga build
-  elaborated 3 rules and 3 targets
-  materalizing 1 artifact
-  A: gcc -c -Wall -Werror -o main.o main.c
-  main.c:3:6: error: return type of 'main' is not 'int' [-Werror=main]
-      3 | void main() { // Oops! main should be declared to return int.
-        |      ^~~~
-  cc1: all warnings being treated as errors
-  jenga.exe: user action failed for rule: 'rule@5'0'
-  CallStack (from HasCallStack):
-    error, called at src/Engine.hs:322:7 in jenga2-0.1.0.0-Ky07jZBfm8KAUzKwZ5S1JB:Engine
-  [1]
+Fix code. Compile of main.c and link are rerun
 
-Remove -Werror againL
-  $ sed -i 's/ -Werror//' build.jenga
-  $ jenga build
-  elaborated 3 rules and 3 targets
-  materalizing 1 artifact
-
-
-Fix code
   $ sed -i 's/void main/int main/' main.c
   $ cat main.c
   #include <stdio.h>
@@ -131,7 +110,7 @@ Define and use header file. Build fails because we failed to declare dependecy o
     error, called at src/Engine.hs:322:7 in jenga2-0.1.0.0-Ky07jZBfm8KAUzKwZ5S1JB:Engine
   [1]
 
-Add missing dep to rule for main.o
+Add missing dep to both compile rules
   $ sed -i 's/: main.c/: main.c fib.h/' build.jenga
   $ sed -i 's/: fib.c/: fib.c fib.h/' build.jenga
   $ cat build.jenga
@@ -143,11 +122,11 @@ Add missing dep to rule for main.o
     gcc -c -Wall -o main.o main.c
   
   fib.o : fib.c fib.h
-    gcc -c -o fib.o fib.c
+    gcc -c -Wall -o fib.o fib.c
 
   $ jenga build
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   A: gcc -c -Wall -o main.o main.c
-  A: gcc -c -o fib.o fib.c
+  A: gcc -c -Wall -o fib.o fib.c
   ran 2 actions

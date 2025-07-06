@@ -11,8 +11,6 @@ Avoiding interference from the global cache, which will make this test non-deter
   $ chmod +x jenga
   $ export PATH=.:$PATH
 
-## Step1: First build
-
 Get the example.
   $ cp -rp $TESTDIR/../files/01/build.jenga .
   $ cp -rp $TESTDIR/../files/01/main.c .

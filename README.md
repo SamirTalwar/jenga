@@ -1,6 +1,6 @@
 # jenga2
 
-Skip the why, and dump directly to [getting started](tutorial/01_getting_started.md).
+Skip the why, and jump directly to [getting started](tutorial/01_getting_started.md).
 
 This project is a redo of the `jenga` build system, which I first wrote whilst working for Jane Street in around 2010. Original `jenga` continued to be used within Jane Street past my leaving in 2016 and right up until 2024, as discussed in this
 [Jane Street Blog](https://blog.janestreet.com/how-we-accidentally-built-a-better-build-system-for-ocaml-index/)
