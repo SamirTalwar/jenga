@@ -1,6 +1,6 @@
 # jenga2
 
-Skip the why, and go straight to the how...jump to the [tutorial](doc/tutorial.md).
+Skip the why, and dump directly to [getting started](tutorial/01_getting_started.md).
 
 This project is a redo of the `jenga` build system, which I first wrote whilst working for Jane Street in around 2010. Original `jenga` continued to be used within Jane Street past my leaving in 2016 and right up until 2024, as discussed in this
 [Jane Street Blog](https://blog.janestreet.com/how-we-accidentally-built-a-better-build-system-for-ocaml-index/)
@@ -30,7 +30,9 @@ The easiest way to get `ghc` haskell and `stack` is via [ghcup](https://www.hask
 
 ## Getting started
 
-Once you have `ghc` and `stack` installed, please proceed to the [tutorial](doc/tutorial.md) to get `jenga` installed, and try making some first builds with it.
+Once you have `ghc` and `stack` installed, please proceed to the
+[tutorial index](tutorial/index.md) to get `jenga` installed,
+and learn how to run jenga builds.
 
 You might also like to browse the [source code](src) and [tests](test) for jenga.
 And one day there might be some more documentation.

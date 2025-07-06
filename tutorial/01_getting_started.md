@@ -1,7 +1,10 @@
 
-# jenga tutorial
+# Getting started with jenga
 
-Following a successful download and install of jenga, this tutorial will guide you through the first steps in writing jenga rules and running jenga builds.
+Following a successful download and install of jenga, this tutorial section will guide you through your first steps in writing jenga rules and running jenga builds.
+
+- [Here](files/01) are the files used in this section of the tutorial.
+- [Here](cram/01_getting_started.t) is the companion cram file.
 
 ## Download, build and install jenga
 
@@ -12,7 +15,6 @@ cd /tmp
 git clone git@github.com:Nick-Chapman/jenga2.git
 cd jenga2/
 stack build
-cram doc/tutorial.t
 ```
 
 This tutorial assumes you have `jenga` in your path.
@@ -27,9 +29,7 @@ Now we can display jenga's top level usage/help message.
 jenga --help
 ```
 
-Alongside this tutorial is a companion [cram test file](tutorial.t). This records the various steps of the tutorial alongside the expected output. If this tutorial diverges from the cram file, then the cram file should be regarded as the source of truth for how jenga operates, because it gets run/checked as part of the above jenga install. If you don't want to run the steps of this tutorial yourself, you could just browse the cram file to see exactly what happens at each step.
-
-## Step 1: First build
+## First build
 
 Let's use jenga to build and run a simple C application.
 
@@ -96,6 +96,5 @@ materalizing 1 artifact
 Hello, jenga world!
 ```
 
-## Step2: More rules; more source files.
-
-TODO
+Continue the jenga tutorial by learning how to setup builds with
+[more rules and more source files](02_more_rules.md).

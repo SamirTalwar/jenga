@@ -2,7 +2,7 @@
 This cram file accompanies the jenga tutorial document.
 
 Get a jenga executable
-  $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
+  $ ln $(find $TESTDIR/../../.stack-work/dist -type f -name main.exe) jenga.exe
 
 Make a small script to run jenga with a local cache.
 Avoiding interference from the global cache, which will make this test non-deterministic.
@@ -14,8 +14,8 @@ Avoiding interference from the global cache, which will make this test non-deter
 ## Step1: First build
 
 Get the example.
-  $ cp -rp $TESTDIR/files/build.jenga .
-  $ cp -rp $TESTDIR/files/main.c .
+  $ cp -rp $TESTDIR/../files/01/build.jenga .
+  $ cp -rp $TESTDIR/../files/01/main.c .
 
 Build. See one build action.
   $ jenga build
