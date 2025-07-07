@@ -19,7 +19,7 @@ import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirec
 import System.Exit(ExitCode(..))
 import System.FilePath qualified as FP
 import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode,getFileStatus,isDirectory)
-import System.Process (shell,readCreateProcess,readCreateProcessWithExitCode,Pid,getCurrentPid)
+import System.Process (shell,callProcess,readCreateProcess,readCreateProcessWithExitCode,Pid,getCurrentPid)
 import Text.Printf (printf)
 
 ----------------------------------------------------------------------
@@ -37,33 +37,59 @@ engineMain userProg = do
   let cacheDir = cacheDirParent </> ".cache/jenga"
  -- printf "cache = %s\n" (show cacheDir)
   myPid <- getCurrentPid
-  i <- runB myPid cacheDir config $ do
-    initDirs
-    elaborateAndBuild config userProg
-  when (i>0) $ do
-    printf "ran %s\n" (pluralize i "action")
+  elaborateAndBuild myPid cacheDir config userProg
 
-elaborateAndBuild :: Config -> UserProg -> B ()
-elaborateAndBuild config@Config{buildMode,args} userProg =
-    runElaboration config (userProg args) >>= \case
-      Left mes -> do
-        BLog $ printf "go -> Error:\n%s\n" (show mes)
-      Right system -> do
-        case buildMode of
-          ModeBuild -> do
-            buildWithSystem config system
-          ModeListTargets -> do
-            let System{how} = system
-            let allTargets = Map.keys how
-            sequence_ [ BLog (show key) | key <- allTargets ]
-          ModeListRules -> do
-            let System{how,rules} = system
-            staticRules <-
-              sequence [ do (deps,action) <- gatherDeps config how depcom
-                            pure $ StaticRule { tag, targets, deps, action }
-                       | Rule{tag,targets,depcom} <- rules
-                       ]
-            BLog (intercalate "\n\n" (map show staticRules))
+elaborateAndBuild :: Pid -> Loc -> Config -> UserProg -> IO ()
+elaborateAndBuild myPid cacheDir config@Config{buildMode,args,materializeAll} userProg = do
+  case buildMode of
+    ModeListTargets -> do
+      i <- runB myPid cacheDir config $ do
+        initDirs
+        system <- runElaboration config (userProg args)
+        let System{how} = system
+        let allTargets = Map.keys how
+        sequence_ [ BLog (show key) | key <- allTargets ]
+      when (i>0) $ do
+        printf "ran %s\n" (pluralize i "action")
+    ModeListRules -> do
+      i <- runB myPid cacheDir config $ do
+        initDirs
+        system <- runElaboration config (userProg args)
+        let System{how,rules} = system
+        staticRules <-
+          sequence [ do (deps,action) <- gatherDeps config how depcom
+                        pure $ StaticRule { tag, targets, deps, action }
+                   | Rule{tag,targets,depcom} <- rules
+                   ]
+        BLog (intercalate "\n\n" (map show staticRules))
+      when (i>0) $ do
+        printf "ran %s\n" (pluralize i "action")
+    ModeBuild -> do
+      i <- runB myPid cacheDir config $ do
+        initDirs
+        system <- runElaboration config (userProg args)
+        reportSystem system
+        BLog $ printf "materalizing %s"
+          (if materializeAll then "all targets" else (pluralize (length (artifacts system)) "artifact"))
+        buildWithSystem config system
+      when (i>0) $ do
+        printf "ran %s\n" (pluralize i "action")
+    ModeBuildAndRun target argsForTarget -> do
+      _i <- runB myPid cacheDir config $ do
+        initDirs
+        system <- runElaboration config (userProg [FP.takeDirectory target])
+        buildWithSystem config system
+      callProcess (printf ",jenga/%s" target) argsForTarget
+
+buildWithSystem :: Config -> System -> B ()
+buildWithSystem config@Config{materializeAll,reverseDepsOrder} system = do
+  let System{artifacts,how} = system
+  let allTargets = Map.keys how
+  let whatToBuild = if materializeAll then allTargets else artifacts
+  _ :: [()] <- parallel [ buildAndMaterialize config how key
+                        | key <- (if reverseDepsOrder then reverse whatToBuild else whatToBuild)
+                        ]
+  pure ()
 
 data StaticRule = StaticRule
   { tag :: String
@@ -83,20 +109,6 @@ seeKeys = intercalate " " . map show
 
 pluralize :: Int -> String -> String
 pluralize n what = printf "%d %s%s" n what (if n == 1 then "" else "s")
-
-
-buildWithSystem :: Config -> System -> B ()
-buildWithSystem config@Config{materializeAll,reverseDepsOrder} system = do
-  reportSystem system
-  let System{artifacts,how} = system
-  let allTargets = Map.keys how
-  BLog $ printf "materalizing %s"
-    (if materializeAll then "all targets" else (pluralize (length artifacts) "artifact"))
-  let whatToBuild = if materializeAll then allTargets else artifacts
-  _ :: [()] <- parallel [ buildAndMaterialize config how key
-                        | key <- (if reverseDepsOrder then reverse whatToBuild else whatToBuild)
-                        ]
-  pure ()
 
 reportSystem :: System -> B ()
 reportSystem system = do
@@ -153,8 +165,14 @@ data System = System { artifacts :: [Key], rules :: [Rule], how :: How }
 
 type How = Map Key Rule
 
-runElaboration :: Config -> G () -> B (OrErr System)
-runElaboration config m = loop m system0 k0
+runElaboration :: Config -> G () -> B System
+runElaboration config m =
+  loop m system0 k0 >>= \case
+    Left mes -> do
+      error $ printf "runElaboration -> Error:\n%s\n" (show mes)
+    Right system -> do
+      pure system
+
   where
     system0 :: System
     system0 = System { rules = [], artifacts = [], how = Map.empty }

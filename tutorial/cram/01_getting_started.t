@@ -28,10 +28,7 @@ Zero rebuild. See no build actions.
   materalizing 1 artifact
 
 Run built executable. See no actions, then the hello program output.
-# $ jenga run hello.exe # TODO
-  $ jenga build; ,jenga/hello.exe
-  elaborated 1 rule and 1 target
-  materalizing 1 artifact
+  $ jenga run hello.exe
   Hello, jenga world!
 
 Modify file and rebuild. See the rebuild action, and the changed output.
@@ -49,8 +46,3 @@ Reset file. See no actions (they were cached), but the output reverted.
   elaborated 1 rule and 1 target
   materalizing 1 artifact
   Hello, jenga world!
-
-
-## Step2: More rules; more source files.
-
-TODO

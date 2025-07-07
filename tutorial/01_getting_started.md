@@ -79,9 +79,10 @@ ran 1 action
 ```
 
 Now let's run our executable which has been placed in the `,jenga/` artifacts directory.
+We use `jenga run <TARGET>` which works like
+`jenga build && ,jenga/<TARGET>` except the build info messages are elided.
 ```
-# jenga run hello.exe # TODO
-jenga build; ,jenga/hello.exe
+jenga run hello.exe
 ```
 And see the output.
 ```
