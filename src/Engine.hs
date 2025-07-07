@@ -131,7 +131,7 @@ materialize (Checksum sum) (Key loc) = do
     XMakeDir (dirLoc materializedFile)
     XHardLink cacheFile materializedFile >>= \case
       True -> pure ()
-      False -> error "Materialize/HardLink: we lost the race" -- TODO
+      False -> error "Materialize/HardLink: we lost the race" -- TODO nothing?
 
 ----------------------------------------------------------------------
 -- locations for cache, sandbox etc
@@ -473,7 +473,6 @@ saveWitness wks wit = do
   tracesDir <- tracesDir
   let witFile = tracesDir </> show wks
   Execute $ do
-    XMakeDir (dirLoc witFile)
     XWriteFile (importWitness wit ++ "\n") witFile
 
 ----------------------------------------------------------------------
