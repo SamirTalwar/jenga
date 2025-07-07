@@ -84,18 +84,15 @@ We take care to mask any pids referenced by sanboxes
   I: test -e example/fib.c
   X: md5sum example/fib.c
   I: test -e .cache/jenga/files/3ec221831446382d711ea3ce24237158
-  I: md5sum
   I: test -e .cache/jenga/traces/347c90127bbc1461aecd80702c3c5bc4
   I: cat .cache/jenga/traces/347c90127bbc1461aecd80702c3c5bc4
   I: test -e .cache/jenga/files/47a0ee09b975f7501dbeb5431b76c24c
   I: test -e example/main.c
   X: md5sum example/main.c
   I: test -e .cache/jenga/files/9d125f57501617a7e09da68a33e65d1c
-  I: md5sum
   I: test -e .cache/jenga/traces/6ce82221b5bd8437a672f4e6d19a9d9e
   I: cat .cache/jenga/traces/6ce82221b5bd8437a672f4e6d19a9d9e
   I: test -e .cache/jenga/files/aac22b6d9cbb6711115a1ebde2cfd6a1
-  I: md5sum
   I: test -e .cache/jenga/traces/4677478c51f6bbba384ed576c9e451ed
   I: cat .cache/jenga/traces/4677478c51f6bbba384ed576c9e451ed
   I: test -e .cache/jenga/files/9efc05831ccef0c24b2697d8fff2acee

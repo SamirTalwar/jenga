@@ -278,7 +278,7 @@ doBuild config@Config{logMode,reverseDepsOrder} how key = demand key
                      ]
 
           let witKey = WitnessKey { action, wdeps }
-          wks <- hashWitnessKey witKey
+          let wks = hashWitnessKey witKey
           verifyWitness sought wks >>= \case
             Just checksum -> do
               --let Bash command = action in BLog $ printf "NOT RUNNING: %s" command -- debug
@@ -422,21 +422,19 @@ data WitnessValue = WitnessValue { wtargets :: WitMap }
 
 data WitMap = WitMap (Map Loc Checksum) deriving Show
 
-data WitKeySum = WitKeySum Checksum
+data WitKeySum = WitKeySum String
 
 data Checksum = Checksum String
 
-instance Show WitKeySum where show (WitKeySum (Checksum sum)) = sum
+instance Show WitKeySum where show (WitKeySum sum) = sum
 instance Show Checksum where show (Checksum sum) = sum
 
 lookWitMap :: Loc -> WitMap -> Checksum
 lookWitMap loc (WitMap m) = maybe err id $ Map.lookup loc m
   where err = error "lookWitMap"
 
-hashWitnessKey :: WitnessKey -> B WitKeySum
-hashWitnessKey wk = do
-  checksum <- Execute (XHash (show wk))
-  pure (WitKeySum checksum)
+hashWitnessKey :: WitnessKey -> WitKeySum
+hashWitnessKey wk = WitKeySum (MD5.md5s (MD5.Str (show wk)))
 
 verifyWitness :: Key -> WitKeySum -> B (Maybe Checksum)
 verifyWitness sought wks = do
@@ -639,7 +637,6 @@ data X a where
   XRunActionInDir :: Loc -> Action -> X Bool
   XMd5sum :: Loc -> X Checksum
 
-  XHash :: String -> X Checksum
   XMakeDir :: Loc -> X ()
   XGlob :: Loc -> X [Loc]
   XFileExists :: Loc -> X Bool
@@ -691,10 +688,6 @@ runX Config{logMode,seeX,seeI} = loop
         pure (Checksum sum)
 
       -- internal file system access (log approx equivalent external command)
-      XHash contents -> do
-        logI $ printf "md5sum"
-        let sum = MD5.md5s (MD5.Str contents)
-        pure (Checksum sum)
       XMakeDir (Loc fp) -> do
         logI $ printf "mkdir -p %s" fp
         createDirectoryIfMissing True fp
