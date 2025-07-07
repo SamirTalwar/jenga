@@ -97,7 +97,7 @@ Define and use header file. Build fails because we failed to declare dependecy o
     return fib(x-1) + fib(x-2);
   }
 
-  $ jenga build
+  $ jenga build 2>&1 | grep -v 'called at'
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   A: gcc -c -Wall -o main.o main.c
@@ -107,8 +107,6 @@ Define and use header file. Build fails because we failed to declare dependecy o
   compilation terminated.
   jenga.exe: user action failed for rule: 'rule@5'0'
   CallStack (from HasCallStack):
-    error, called at src/Engine.hs:340:7 in jenga2-0.1.0.0-Ky07jZBfm8KAUzKwZ5S1JB:Engine
-  [1]
 
 Add missing dep to both compile rules
   $ sed -i 's/: main.c/: main.c fib.h/' build.jenga

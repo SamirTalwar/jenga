@@ -119,13 +119,12 @@ reportSystem system = do
 
 buildAndMaterialize :: Config -> How -> Key -> B ()
 buildAndMaterialize config how key = do
-  checksum <- doBuild config how key
-  materialize checksum key
+  digest <- doBuild config how key
+  materialize digest key
 
-materialize :: Checksum -> Key -> B ()
-materialize (Checksum sum) (Key loc) = do
-  cachedFilesDir <- cachedFilesDir
-  let cacheFile = cachedFilesDir </> sum
+materialize :: Digest -> Key -> B ()
+materialize digest (Key loc) = do
+  cacheFile <- cacheFile digest
   let materializedFile = artifactsDir </> show loc
   Execute $ do
     XMakeDir (dirLoc materializedFile)
@@ -232,7 +231,7 @@ locateKey (Key (Loc fp)) = Loc (FP.takeFileName fp)
 ----------------------------------------------------------------------
 -- Build
 
-doBuild :: Config -> How -> Key -> B Checksum
+doBuild :: Config -> How -> Key -> B Digest
 doBuild config@Config{logMode,reverseDepsOrder} how key = demand key
   where
     seeV = case logMode of LogVerbose -> True; _ -> False
@@ -241,16 +240,16 @@ doBuild config@Config{logMode,reverseDepsOrder} how key = demand key
     log mes = when seeV $ BLog (printf "B: %s" mes)
 
     -- TODO: detect & error on build cycles
-    demand :: Key -> B Checksum -- TODO: inline demand/demand1
+    demand :: Key -> B Digest -- TODO: inline demand/demand1
     demand sought = do
       BGetKey sought >>= \case
-        Just sum -> pure sum
+        Just digest -> pure digest
         Nothing -> do
-          sum <- demand1 sought
-          BSetKey sought sum -- test/example6 fails if this line is removed
-          pure sum
+          digest <- demand1 sought
+          BSetKey sought digest -- test/example6 fails if this line is removed
+          pure digest
 
-    demand1 :: Key -> B Checksum
+    demand1 :: Key -> B Digest
     demand1 sought = do
       --log $ printf "Require: %s" (show sought) -- too noisy to see when it is source?
       case Map.lookup sought how of
@@ -260,8 +259,8 @@ doBuild config@Config{logMode,reverseDepsOrder} how key = demand key
             False -> do
               error (printf "'%s' is not source and has no build rule" (show sought))
             True -> do
-              checksum <- copyIntoCache loc
-              pure checksum
+              digest <- copyIntoCache loc
+              pure digest
 
         -- TODO: document this flow...
         Just rule -> do
@@ -273,16 +272,16 @@ doBuild config@Config{logMode,reverseDepsOrder} how key = demand key
           let deps = if reverseDepsOrder then reverse deps0 else deps0
 
           wdeps <- (WitMap . Map.fromList) <$>
-            parallel [ do checksum <- demand dep; pure (locateKey dep,checksum)
+            parallel [ do digest <- demand dep; pure (locateKey dep,digest)
                      | dep <- deps
                      ]
 
           let witKey = WitnessKey { action, wdeps }
           let wks = hashWitnessKey witKey
           verifyWitness sought wks >>= \case
-            Just checksum -> do
+            Just digest -> do
               --let Bash command = action in BLog $ printf "NOT RUNNING: %s" command -- debug
-              pure checksum
+              pure digest
 
             Nothing -> do
               --log $ printf "Execute: %s" (show rule)
@@ -290,8 +289,8 @@ doBuild config@Config{logMode,reverseDepsOrder} how key = demand key
               let val = WitnessValue { wtargets }
               let wit = Witness { key = witKey, val }
               saveWitness wks wit
-              let checksum = lookWitMap (locateKey sought) wtargets
-              pure checksum
+              let digest = lookWitMap (locateKey sought) wtargets
+              pure digest
 
 
 gatherDeps :: Config -> How -> D a -> B ([Key],a)
@@ -316,8 +315,8 @@ gatherDeps config how d = loop d [] k0
 
 readKey :: Config -> How -> Key -> B String
 readKey config how key = do
-  checksum <- doBuild config how key
-  file <- cacheFile checksum
+  digest <- doBuild config how key
+  file <- cacheFile digest
   Execute (XReadFile file)
 
 existsKey :: How -> Key -> B Bool
@@ -348,13 +347,13 @@ setupInputs :: Loc -> WitMap -> B ()
 setupInputs sandbox (WitMap m1) = do
   sequence_
     [ do
-        file <- cacheFile checksum
+        file <- cacheFile digest
         Execute $ do
           XHardLink file (sandbox </> show loc) >>= \case
             True -> pure ()
             False -> error "setupInput/HardLink: we lost the race" -- TODO
 
-    | (loc,checksum) <- Map.toList m1
+    | (loc,digest) <- Map.toList m1
     ]
 
 cacheOutputs :: Loc -> [Key] -> B WitMap
@@ -367,27 +366,27 @@ cacheOutputs sandbox targets = do
           False -> do
             error (printf "rule failed to produced declared target '%s'" (show target))
           True -> do
-            checksum <- linkIntoCache sandboxLoc
-            pure (tag,checksum)
+            digest <- linkIntoCache sandboxLoc
+            pure (tag,digest)
     | target <- targets
     ]
 
-copyIntoCache :: Loc -> B Checksum
+copyIntoCache :: Loc -> B Digest
 copyIntoCache loc = do
-  checksum <- Execute (XMd5sum loc)
-  file <- cacheFile checksum
+  digest <- Execute (XDigest loc)
+  file <- cacheFile digest
   Execute (XFileExists file) >>= \case
     True -> pure ()
     False -> do
       Execute $ do
         XCopyFile loc file
         XMakeReadOnly file
-  pure checksum
+  pure digest
 
-linkIntoCache :: Loc -> B Checksum
+linkIntoCache :: Loc -> B Digest
 linkIntoCache loc = do
-  checksum <- Execute (XMd5sum loc)
-  file <- cacheFile checksum
+  digest <- Execute (XDigest loc)
+  file <- cacheFile digest
   Execute $ do
     XFileExists file >>= \case -- small optimization
       True -> pure ()
@@ -404,12 +403,17 @@ linkIntoCache loc = do
             -- TODO: propogate the executable status
             pure ()
     XMakeReadOnly file
-  pure checksum
+  pure digest
 
-cacheFile :: Checksum -> B Loc
-cacheFile (Checksum sum) = do
+cacheFile :: Digest -> B Loc
+cacheFile (Digest str) = do
   cachedFilesDir <- cachedFilesDir
-  pure (cachedFilesDir </> sum)
+  pure (cachedFilesDir </> str)
+
+-- message digest of a file; computed by call to external md5sum
+data Digest = Digest String
+
+instance Show Digest where show (Digest str) = str
 
 ----------------------------------------------------------------------
 -- Build witnesses (AKA constructive traces)
@@ -420,23 +424,21 @@ data WitnessKey = WitnessKey { action :: Action, wdeps :: WitMap } deriving Show
 
 data WitnessValue = WitnessValue { wtargets :: WitMap }
 
-data WitMap = WitMap (Map Loc Checksum) deriving Show
+data WitMap = WitMap (Map Loc Digest) deriving Show
 
-data WitKeySum = WitKeySum String
+-- message digest of a witness trace; computer by internal MD5 code
+data WitKeyHash = WitKeyHash String
 
-data Checksum = Checksum String
+instance Show WitKeyHash where show (WitKeyHash str) = str
 
-instance Show WitKeySum where show (WitKeySum sum) = sum
-instance Show Checksum where show (Checksum sum) = sum
-
-lookWitMap :: Loc -> WitMap -> Checksum
+lookWitMap :: Loc -> WitMap -> Digest
 lookWitMap loc (WitMap m) = maybe err id $ Map.lookup loc m
   where err = error "lookWitMap"
 
-hashWitnessKey :: WitnessKey -> WitKeySum
-hashWitnessKey wk = WitKeySum (MD5.md5s (MD5.Str (show wk)))
+hashWitnessKey :: WitnessKey -> WitKeyHash
+hashWitnessKey wk = WitKeyHash (MD5.md5s (MD5.Str (show wk)))
 
-verifyWitness :: Key -> WitKeySum -> B (Maybe Checksum)
+verifyWitness :: Key -> WitKeyHash -> B (Maybe Digest)
 verifyWitness sought wks = do
   lookupWitness wks >>= \case
     Nothing -> pure Nothing
@@ -444,14 +446,14 @@ verifyWitness sought wks = do
       let Witness{val} = wit
       let WitnessValue{wtargets} = val
       let WitMap m = wtargets
-      ok <- all id <$> sequence [ existsCacheFile sum | (_,sum) <- Map.toList m ]
+      ok <- all id <$> sequence [ existsCacheFile digest | (_,digest) <- Map.toList m ]
       if not ok then pure Nothing else do
         -- The following lookup can fail if the sought-key was not recorded.
         -- i.e. we have added a target; but the actions/deps are otherwise unchanged
         -- the user action will have to be rerun.
         pure $ Map.lookup (locateKey sought) m
 
-lookupWitness :: WitKeySum -> B (Maybe Witness)
+lookupWitness :: WitKeyHash -> B (Maybe Witness)
 lookupWitness wks = do
   tracesDir <- tracesDir
   let witFile = tracesDir </> show wks
@@ -461,12 +463,12 @@ lookupWitness wks = do
       contents <- XReadFile witFile
       pure $ Just (exportWitness contents)
 
-existsCacheFile :: Checksum -> B Bool
-existsCacheFile checksum = do
-  file <- cacheFile checksum
+existsCacheFile :: Digest -> B Bool
+existsCacheFile digest = do
+  file <- cacheFile digest
   Execute (XFileExists file)
 
-saveWitness :: WitKeySum -> Witness -> B ()
+saveWitness :: WitKeyHash -> Witness -> B ()
 saveWitness wks wit = do
   tracesDir <- tracesDir
   let witFile = tracesDir </> show wks
@@ -489,20 +491,20 @@ data QWitness = WIT
   }
   deriving (Show,Read)
 
-type QWitMap = [(FilePath,QChecksum)]
-type QChecksum = String
+type QWitMap = [(FilePath,QDigest)]
+type QDigest = String
 
 toQ :: Witness -> QWitness
 toQ wit = do
   let Witness{key,val} = wit
   let WitnessKey{action=Bash command,wdeps} = key
   let WitnessValue{wtargets} = val
-  let fromStore (WitMap m) = [ (fp,sum) | (Loc fp,Checksum sum) <- Map.toList m ]
+  let fromStore (WitMap m) = [ (fp,digest) | (Loc fp,Digest digest) <- Map.toList m ]
   WIT { command, deps = fromStore wdeps, targets = fromStore wtargets }
 
 fromQ :: QWitness -> Witness
 fromQ WIT{command,deps,targets} = do
-  let toStore xs = WitMap (Map.fromList [ (Loc fp,Checksum sum) | (fp,sum) <- xs ])
+  let toStore xs = WitMap (Map.fromList [ (Loc fp,Digest digest) | (fp,digest) <- xs ])
   let key = WitnessKey{action=Bash command,wdeps = toStore deps}
   let val = WitnessValue{wtargets = toStore targets}
   Witness{key,val}
@@ -527,8 +529,8 @@ data B a where -- TODO: BFail?
   BCacheDir :: B Loc
   BNewSandbox :: B Loc
   Execute :: X a -> B a
-  BGetKey :: Key -> B (Maybe Checksum)
-  BSetKey :: Key -> Checksum -> B ()
+  BGetKey :: Key -> B (Maybe Digest)
+  BSetKey :: Key -> Digest -> B ()
   BPar :: B a -> B b -> B (a,b)
   BYield :: B ()
 
@@ -564,10 +566,10 @@ runB myPid cacheDir config@Config{keepSandBoxes} b = runX config $ do
         let BState{memo} = s
         case Map.lookup key memo of
           Nothing -> k s Nothing
-          Just sum -> k s (Just sum)
-      BSetKey key sum -> do
+          Just digest -> k s (Just digest)
+      BSetKey key digest -> do
         let BState{memo} = s
-        k s { memo = Map.insert key sum memo } ()
+        k s { memo = Map.insert key digest memo } ()
 
       BPar a b -> do
         keyA <- XIO HMap.createKey
@@ -612,7 +614,7 @@ exploreYield build = do
 
 data BState = BState
   { sandboxCounter :: Int
-  , memo :: Map Key Checksum
+  , memo :: Map Key Digest
   , active :: [BJob]
   , blocked :: [BJob]
   , hmap :: HMap
@@ -635,7 +637,7 @@ data X a where
   XIO :: IO a -> X a
 
   XRunActionInDir :: Loc -> Action -> X Bool
-  XMd5sum :: Loc -> X Checksum
+  XDigest :: Loc -> X Digest
 
   XMakeDir :: Loc -> X ()
   XGlob :: Loc -> X [Loc]
@@ -680,12 +682,12 @@ runX Config{logMode,seeX,seeI} = loop
         pure ok
 
       -- other commands with shell out to external process
-      XMd5sum (Loc fp) -> do
+      XDigest (Loc fp) -> do
         let command = printf "md5sum %s" fp
         logX command
         output <- readCreateProcess (shell command) ""
-        let sum = case (splitOn " " output) of [] -> error "XMd5sum/split"; x:_ -> x
-        pure (Checksum sum)
+        let str = case (splitOn " " output) of [] -> error "XDigest/split"; x:_ -> x
+        pure (Digest str)
 
       -- internal file system access (log approx equivalent external command)
       XMakeDir (Loc fp) -> do
