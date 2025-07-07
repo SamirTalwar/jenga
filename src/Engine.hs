@@ -232,65 +232,55 @@ locateKey (Key (Loc fp)) = Loc (FP.takeFileName fp)
 -- Build
 
 doBuild :: Config -> How -> Key -> B Digest
-doBuild config@Config{logMode,reverseDepsOrder} how key = demand key
-  where
-    seeV = case logMode of LogVerbose -> True; _ -> False
+doBuild config@Config{logMode,reverseDepsOrder} how = do
+  -- TODO: document this flow.
+  -- TODO: check for cycles.
+  memoDigestByKey $ \sought -> do
+    case Map.lookup sought how of
+      Nothing -> do
+        let Key loc = sought
+        Execute (XFileExists loc) >>= \case
+          False -> do
+            error (printf "'%s' is not source and has no build rule" (show sought))
+          True -> do
+            digest <- copyIntoCache loc
+            pure digest
 
-    log :: String -> B ()
-    log mes = when seeV $ BLog (printf "B: %s" mes)
+      Just rule@Rule{depcom} -> do
+        let seeV = case logMode of LogVerbose -> True; _ -> False
+        when seeV $ BLog (printf "B: Require: %s" (show sought))
+        (deps0,action) <- gatherDeps config how depcom
 
-    -- TODO: detect & error on build cycles
-    demand :: Key -> B Digest -- TODO: inline demand/demand1
-    demand sought = do
-      BGetKey sought >>= \case
-        Just digest -> pure digest
-        Nothing -> do
-          digest <- demand1 sought
-          BSetKey sought digest -- test/example6 fails if this line is removed
-          pure digest
+        let deps = if reverseDepsOrder then reverse deps0 else deps0
 
-    demand1 :: Key -> B Digest
-    demand1 sought = do
-      --log $ printf "Require: %s" (show sought) -- too noisy to see when it is source?
-      case Map.lookup sought how of
-        Nothing -> do
-          let Key loc = sought
-          Execute (XFileExists loc) >>= \case
-            False -> do
-              error (printf "'%s' is not source and has no build rule" (show sought))
-            True -> do
-              digest <- copyIntoCache loc
-              pure digest
+        wdeps <- (WitMap . Map.fromList) <$>
+          parallel [ do digest <- doBuild config how dep; pure (locateKey dep,digest)
+                   | dep <- deps
+                   ]
 
-        -- TODO: document this flow...
-        Just rule -> do
-          log $ printf "Require: %s" (show sought)
-          --log $ printf "Consult: %s" (show rule)
-          let Rule{depcom} = rule
-          (deps0,action) <- gatherDeps config how depcom
+        let witKey = WitnessKey { action, wdeps }
+        let wks = hashWitnessKey witKey
+        verifyWitness sought wks >>= \case
+          Just digest -> do
+            pure digest
 
-          let deps = if reverseDepsOrder then reverse deps0 else deps0
+          Nothing -> do
+            wtargets <- buildWithRule config action wdeps rule
+            let val = WitnessValue { wtargets }
+            let wit = Witness { key = witKey, val }
+            saveWitness wks wit
+            let digest = lookWitMap (locateKey sought) wtargets
+            pure digest
 
-          wdeps <- (WitMap . Map.fromList) <$>
-            parallel [ do digest <- demand dep; pure (locateKey dep,digest)
-                     | dep <- deps
-                     ]
 
-          let witKey = WitnessKey { action, wdeps }
-          let wks = hashWitnessKey witKey
-          verifyWitness sought wks >>= \case
-            Just digest -> do
-              --let Bash command = action in BLog $ printf "NOT RUNNING: %s" command -- debug
-              pure digest
-
-            Nothing -> do
-              --log $ printf "Execute: %s" (show rule)
-              wtargets <- buildWithRule config action wdeps rule
-              let val = WitnessValue { wtargets }
-              let wit = Witness { key = witKey, val }
-              saveWitness wks wit
-              let digest = lookWitMap (locateKey sought) wtargets
-              pure digest
+memoDigestByKey :: (Key -> B Digest) -> Key -> B Digest
+memoDigestByKey f sought = do
+  BGetKey sought >>= \case
+    Just digest -> pure digest
+    Nothing -> do
+      digest <- f sought
+      BSetKey sought digest
+      pure digest
 
 
 gatherDeps :: Config -> How -> D a -> B ([Key],a)
