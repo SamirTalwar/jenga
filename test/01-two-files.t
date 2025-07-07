@@ -74,8 +74,8 @@ We take care to mask any pids referenced by sanboxes
   I: ls example
   I: test -e example/build.jenga
   X: md5sum example/build.jenga
-  I: test -e .cache/jenga/files/ade02a5a8e9b16d13646fc43aa2e61ca
-  I: cat .cache/jenga/files/ade02a5a8e9b16d13646fc43aa2e61ca
+  I: test -e .cache/jenga/files/88547b1673021d538aa20da95fc4b55c
+  I: cat .cache/jenga/files/88547b1673021d538aa20da95fc4b55c
   I: test -e example/main.o
   I: test -e example/fib.o
   I: test -e example/main.exe

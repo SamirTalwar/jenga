@@ -6,8 +6,8 @@
 main.o : main.c
   gcc -c main.c -o main.o
 
-fib.o : fib.c
-  gcc -c fib.c -o fib.o
+# Test single-line rule syntax...
+fib.o : fib.c : gcc -c fib.c -o fib.o
 
 main.exe : fib.o main.o
   gcc fib.o main.o -o main.exe

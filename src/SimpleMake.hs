@@ -160,17 +160,25 @@ gram = start
     triple pos target1 = do
       moreTargets <- many identifier
       let targets = target1 : moreTargets
-      lit ':'
-      skip space
+      colon
       deps <- many dep
-      alts [nl,commentToEol]
-      space -- at least one space char to begin the action
-      skip space
+      alts [colon,newlineAndIndent]
       -- TODO: support comments in action body
       action <- singleAcionLine
       alts [nl,commentToEol]
       skip $ alts [nl,commentToEol]
       pure (ClauseTrip (Trip {pos,targets,deps,action}))
+
+    -- traditional make syntax
+    newlineAndIndent = do
+      alts [nl,commentToEol]
+      space -- at least one space char to begin the action
+      skip space
+
+    -- syntax to allow a rule on a single line
+    colon = do
+      lit ':'
+      skip space
 
     dep = do
       alts [ do lit '@'; x <- identifier; pure (DepScanner x)
