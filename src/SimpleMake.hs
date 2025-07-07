@@ -6,7 +6,7 @@ import Data.Set qualified as Set
 import ElabC qualified (macroC)
 import Interface (G(..),Rule(..),Action(..),D(..),Key(..))
 import Par4 (Position,Par,parse,position,skip,alts,many,some,sat,lit)
-import StdBuildUtils ((</>),dirKey)
+import StdBuildUtils ((</>),dirKey,baseKey)
 import Text.Printf (printf)
 
 dispatch :: String -> Key -> G()
@@ -14,54 +14,75 @@ dispatch = \case
   "CC" -> ElabC.macroC
   name -> error (printf "unknown macro name: %s" name)
 
+-- TODO: consider passing the "dir" context as read-info in the G monad
+
 elab :: Key -> G ()
 elab config  = do
-  s <- GReadKey config
-  let clauses = Par4.parse gram s
-  sequence_ [ GArtifact (makeKey key) | key <- selectArtifacts clauses ]
-  mapM_ elabClause clauses
-    where
-      elabClause :: Clause -> G ()
-      elabClause = \case
-        ClauseTrip x -> elabTrip x
-        ClauseMacro m -> elabMacro m
+  -- _generateAllFileRule -- TODO: is there a better way?
+  elabRuleFile config
+  where
 
-      elabMacro :: Macro -> G ()
-      elabMacro = \case
-        Macro{name,arg} -> dispatch name (makeKey arg)
+    elabRuleFile :: Key -> G ()
+    elabRuleFile config  = do
+      s <- GReadKey config
+      let clauses = Par4.parse gram s
+      sequence_ [ GArtifact (makeKey key) | key <- selectArtifacts clauses ]
+      mapM_ elabClause clauses
 
-      elabTrip :: Trip -> G ()
-      elabTrip Trip{pos,targets,deps,action} = do
-        GRule $ Rule
-          { tag = printf "rule@%s" (show pos)
-          , targets = map makeKey targets
-          , depcom = do sequence_ [ makeDep targets dep | dep <- deps ];  pure (Bash action)
-          }
+    elabClause :: Clause -> G ()
+    elabClause = \case
+      ClauseTrip x -> elabTrip x
+      ClauseMacro m -> elabMacro m
+      ClauseInclude filename -> elabRuleFile (makeKey filename)
 
-      makeDep targets = \case
-        DepPlain file -> DNeed (makeKey file)
-        DepScanner file -> do
-          let key = makeKey file
-          contents <- DReadKey key
-          let deps = filterDepsFor targets contents
-          sequence_ [ DNeed (makeKey dep) | dep <- deps ]
-        DepOpt file -> do
-          let key = makeKey file
-          b <- DExistsKey key
-          if b then DNeed key else pure ()
+    elabMacro :: Macro -> G ()
+    elabMacro = \case
+      Macro{name,arg} -> dispatch name (makeKey arg)
 
-      makeKey :: String -> Key
-      makeKey basename = Key (dirKey config </> basename)
+    elabTrip :: Trip -> G ()
+    elabTrip Trip{pos,targets,deps,action} = do
+      GRule $ Rule
+        { tag = printf "rule@%s" (show pos)
+        , targets = map makeKey targets
+        , depcom = do sequence_ [ makeDep targets dep | dep <- deps ];  pure (Bash action)
+        }
 
+    makeDep targets = \case
+      DepPlain file -> DNeed (makeKey file)
+      DepScanner file -> do
+        let key = makeKey file
+        contents <- DReadKey key
+        let deps = filterDepsFor targets contents
+        sequence_ [ DNeed (makeKey dep) | dep <- deps ]
+      DepOpt file -> do
+        let key = makeKey file
+        b <- DExistsKey key
+        if b then DNeed key else pure ()
 
-selectArtifacts :: [Clause] -> [String]
-selectArtifacts clauses = do
-  -- Only considering clauses which define rule-triples...
-  -- Any target which isn't a deps is considered an artifcat
-  let targets = [ key | ClauseTrip (Trip{targets}) <- clauses, key <- targets ]
-  let deps = [ keyOfDep dep
-             | ClauseTrip (Trip{deps}) <- clauses, dep <- deps ]
-  Set.toList (Set.fromList targets \\ Set.fromList deps)
+    makeKey :: String -> Key
+    makeKey basename = Key (dirKey config </> basename)
+
+    -- special rule so user rules can access the list of all file names
+    _generateAllFileRule =  do
+      let dir = dirKey config
+      allFiles <- map Key <$> GGlob dir
+      GRule (Rule { tag = printf "glob-%s" (show dir)
+                  , targets = [ makeKey allFilesName ]
+                  , depcom = pure (Bash (printf "echo -n '%s' > %s"
+                                         (unlines (map baseKey allFiles))
+                                         allFilesName)) })
+
+    allFilesName = "all.files"
+
+    selectArtifacts :: [Clause] -> [String]
+    selectArtifacts clauses = do
+      -- Only considering clauses which define rule-triples...
+      -- Any target which isn't a deps is considered an artifcat
+      let targets = [ key | ClauseTrip (Trip{targets}) <- clauses, key <- targets ]
+      let deps = [ keyOfDep dep
+                 | ClauseTrip (Trip{deps}) <- clauses, dep <- deps ]
+                 ++ [ allFilesName ]
+      Set.toList (Set.fromList targets \\ Set.fromList deps)
 
 
 -- TODO: maybe cleaner to use par4 parser to parse the scanner deps!!
@@ -82,7 +103,7 @@ filterDepsFor targets contents = do
   [ dep | line <- lines contents, dep <- parse line ]
 
 
-data Clause = ClauseTrip Trip | ClauseMacro Macro
+data Clause = ClauseTrip Trip | ClauseMacro Macro | ClauseInclude String
 
 data Macro = Macro { name :: String, arg :: String } -- TODO: multi arg macro
 
@@ -116,7 +137,15 @@ gram = start
     clause = do
       pos <- position
       x <- identifier
-      alts [triple pos x, macroCall pos x]
+      if x == "include" then includeClause else
+        alts [triple pos x, macroCall pos x]
+
+    includeClause = do
+      fileName <- identifier
+      skip space
+      alts [nl,commentToEol]
+      skip $ alts [nl,commentToEol]
+      pure (ClauseInclude fileName)
 
     macroCall _pos name = do
       lit '('

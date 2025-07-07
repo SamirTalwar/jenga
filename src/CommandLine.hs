@@ -111,6 +111,7 @@ sharedOptions = Config
   switch (short 'k' <> long "keep-sandboxes"
           <> help "Keep all sandboxes when build completes")
   <*>
+  -- TODO: simpler to just always materialize all targets build?
   switch (short 'm' <> long "materialize-all"
           <> help "Materialize all targets; not just declared artifacts")
   <*>

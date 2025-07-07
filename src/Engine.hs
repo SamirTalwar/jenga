@@ -189,7 +189,6 @@ runElaboration config m =
       GFail mes -> pure (Left (ErrMessage mes)) -- ignore k
       GRule rule -> do
         let Rule{targets} = rule
-        --BLog $ printf "Elaborate rule: %s" (show rule)
         xs <- sequence [ do b <- Execute (XFileExists loc); pure (key,b)
                         | key@(Key loc) <- targets ]
         case [ key | (key,isSource) <- xs, isSource ] of
@@ -220,9 +219,7 @@ runElaboration config m =
         k system bool
       GReadKey key -> do
         let System{how} = system
-        _ <- doBuild config how key -- building before elaboration is finished
-        let Key loc = key
-        contents <- Execute (XReadFile loc)
+        contents <- readKey config how key -- make cause building
         k system contents
 
 locateKey :: Key -> Loc

@@ -19,7 +19,7 @@ main = engineMain $ \args -> do
 
 dispatchAllConfigs :: Loc -> G ()
 dispatchAllConfigs dir = do
-  configNames <- listBaseNamesWithSuffix dir ".jenga"
+  configNames <- listBaseNamesWithSuffix dir ".jenga"-- TODO: only read "build.jenga" files
   forM_ configNames $ \(Loc fullName) -> do
     let config = Key (Loc (fullName ++ ".jenga"))
     SimpleMake.elab config
