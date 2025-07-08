@@ -35,4 +35,6 @@ Once you have `ghc` and `stack` installed, please proceed to the
 and learn how to run jenga builds.
 
 You might also like to browse the [source code](src) and [tests](test) for jenga.
-And one day there might be some more documentation.
+
+The tutorial gives examples of using `build.jenga` files to configure Jenga.
+[The syntax is specified here](doc/jenga-syntax.md).

@@ -9,13 +9,6 @@ import Par4 (Position,Par,parse,position,skip,alts,many,some,sat,lit)
 import StdBuildUtils ((</>),dirKey,baseKey)
 import Text.Printf (printf)
 
-dispatch :: String -> Key -> G()
-dispatch = \case
-  "CC" -> ElabC.macroC
-  name -> error (printf "unknown macro name: %s" name)
-
--- TODO: consider passing the "dir" context as read-info in the G monad
-
 elaborate :: Key -> G ()
 elaborate config  = do
   allFilesRule
@@ -109,6 +102,12 @@ filterDepsFor targets contents = do
   [ dep | line <- lines contents, dep <- parseDepsLine line ]
 
 
+dispatch :: String -> Key -> G()
+dispatch = \case
+  "CC" -> ElabC.macroC
+  name -> error (printf "unknown macro name: %s" name)
+
+-- TODO: remove support for macros
 data Clause = ClauseTrip Trip | ClauseMacro Macro | ClauseInclude String
 
 data Macro = Macro { name :: String, arg :: String } -- TODO: multi arg macro
