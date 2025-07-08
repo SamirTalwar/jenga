@@ -250,7 +250,7 @@ doBuild config@Config{logMode,reverseDepsOrder} how = do
       Just rule@Rule{depcom} -> do
         let seeV = case logMode of LogVerbose -> True; _ -> False
         when seeV $ BLog (printf "B: Require: %s" (show sought))
-        (deps0,action) <- gatherDeps config how depcom
+        (deps0,action@Action{command}) <- gatherDeps config how depcom
 
         let deps = if reverseDepsOrder then reverse deps0 else deps0
 
@@ -259,7 +259,7 @@ doBuild config@Config{logMode,reverseDepsOrder} how = do
                    | dep <- deps
                    ]
 
-        let witKey = WitnessKey { action, wdeps }
+        let witKey = WitnessKey { command, wdeps }
         let wks = hashWitnessKey witKey
         verifyWitness sought wks >>= \case
           Just digest -> do
@@ -414,7 +414,7 @@ data Witness = Witness { key :: WitnessKey, val :: WitnessValue }
 data WitnessValue = WitnessValue { wtargets :: WitMap }
 
 -- TODO: just command in WitnessKey? hidden dont matter
-data WitnessKey = WitnessKey { action :: Action, wdeps :: WitMap } deriving Show
+data WitnessKey = WitnessKey { command :: String, wdeps :: WitMap } deriving Show
 
 data WitMap = WitMap (Map Loc Digest) deriving Show
 
@@ -489,7 +489,7 @@ type QDigest = String
 toQ :: Witness -> QWitness
 toQ wit = do
   let Witness{key,val} = wit
-  let WitnessKey{action=Action{command},wdeps} = key
+  let WitnessKey{command,wdeps} = key
   let WitnessValue{wtargets} = val
   let fromStore (WitMap m) = [ (fp,digest) | (Loc fp,Digest digest) <- Map.toList m ]
   WIT { command, deps = fromStore wdeps, targets = fromStore wtargets }
@@ -497,7 +497,7 @@ toQ wit = do
 fromQ :: QWitness -> Witness
 fromQ WIT{command,deps,targets} = do
   let toStore xs = WitMap (Map.fromList [ (Loc fp,Digest digest) | (fp,digest) <- xs ])
-  let key = WitnessKey{action=Action{command,hidden=undefined},wdeps = toStore deps}
+  let key = WitnessKey{command, wdeps = toStore deps}
   let val = WitnessValue{wtargets = toStore targets}
   Witness{key,val}
 
