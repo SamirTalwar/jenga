@@ -529,6 +529,7 @@ data B a where -- TODO: BFail?
 
 runB :: Pid -> Loc -> Config -> B () -> IO Int
 runB myPid cacheDir config@Config{keepSandBoxes} b = runX config $ do
+  when keepSandBoxes $ XLog (printf "sandboxes created in: %s" (show sandboxParent))
   loop b state0 k0
   where
     -- TODO: We should cleanup our sandbox dir on abort.
@@ -536,7 +537,7 @@ runB myPid cacheDir config@Config{keepSandBoxes} b = runX config $ do
     -- Or if any build command fails; since that aborts jenga (TODO: fix that!)
     -- This means that even the cram tests leave .jbox droppings around.
     -- Not the end of the day, but we could be cleaner.
-    sandboxParentDirForThisProcess = Loc (printf "/tmp/.jbox/%s" (show myPid))
+    sandboxParent = Loc (printf "/tmp/.jbox/%s" (show myPid))
 
     state0 = BState
       { sandboxCounter = 0
@@ -549,7 +550,7 @@ runB myPid cacheDir config@Config{keepSandBoxes} b = runX config $ do
 
     k0 :: BState -> () -> X Int
     k0 BState{runCounter} () = do
-      when (not keepSandBoxes) $ XRemoveDirRecursive sandboxParentDirForThisProcess
+      when (not keepSandBoxes) $ XRemoveDirRecursive sandboxParent
       pure runCounter
 
     loop :: B a -> BState -> (BState -> a -> X Int) -> X Int
@@ -560,7 +561,7 @@ runB myPid cacheDir config@Config{keepSandBoxes} b = runX config $ do
       BCacheDir -> k s cacheDir
       BNewSandbox -> do
         let BState{sandboxCounter=i} = s
-        k s { sandboxCounter = 1 + i } (sandboxParentDirForThisProcess </> show i)
+        k s { sandboxCounter = 1 + i } (sandboxParent </> show i)
       BRunActionInDir sandbox action@Action{hidden} -> do
         bool <- XRunActionInDir sandbox action
         k s { runCounter = runCounter s + (if hidden then 0 else 1) } bool
