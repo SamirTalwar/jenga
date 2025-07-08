@@ -1,19 +1,11 @@
 
   $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
+  $ echo 'exec ./jenga.exe "$@" --cache=.' > jenga
+  $ chmod +x jenga
+  $ export PATH=.:$PATH
   $ cp -rp $TESTDIR/example-03-simple-make example
 
-  $ find .
-  .
-  ./jenga.exe
-  ./example
-  ./example/defs.h.in
-  ./example/fib.c
-  ./example/main.c
-  ./example/fib.h
-  ./example/README
-  ./example/build.jenga
-
-  $ ./jenga.exe build -c.
+  $ jenga build
   elaborated 4 rules and 4 targets
   materalizing 1 artifact
   A: gcc -c fib.c -o fib.o

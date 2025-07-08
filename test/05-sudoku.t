@@ -1,8 +1,11 @@
 
   $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
+  $ echo 'exec ./jenga.exe "$@" --cache=.' > jenga
+  $ chmod +x jenga
+  $ export PATH=.:$PATH
   $ cp -rp $TESTDIR/example-05-sudoku example
 
-  $ ./jenga.exe build -c.
+  $ jenga build
   elaborated 7 rules and 8 targets
   materalizing 1 artifact
   A: find $HOME/.stack | grep lib/.*/bin/ghc$ | rev | cut -d/ -f3 | rev | cut -d- -f2 | sort -n | tail -1 > latest-version

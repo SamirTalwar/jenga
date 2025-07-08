@@ -1,9 +1,12 @@
 
   $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
+  $ echo 'exec ./jenga.exe "$@" --cache=.' > jenga
+  $ chmod +x jenga
+  $ export PATH=.:$PATH
   $ cp -rp $TESTDIR/example-08-scanner-chain example
 
 Initial build
-  $ ./jenga.exe build -c. -m
+  $ jenga build -m
   elaborated 6 rules and 6 targets
   materalizing all targets
   A: gcc -MG -MM fib.c > fib.d
@@ -26,7 +29,7 @@ Inspect the generated deps
 
 Mod-A (change const value)
   $ echo '#define MY_CONST 11' > example/defs2.h
-  $ ./jenga.exe build -c. -m
+  $ jenga build -m
   elaborated 6 rules and 6 targets
   materalizing all targets
   A: gcc -c main.c -o main.o
@@ -41,7 +44,7 @@ Mod-A (change const value)
 
 Mod-B (shorten the chain)
   $ echo '#define MY_CONST 12' > example/defs.h
-  $ ./jenga.exe build -c. -m
+  $ jenga build -m
   elaborated 6 rules and 6 targets
   materalizing all targets
   A: gcc -MG -MM main.c > main.d
@@ -58,7 +61,7 @@ Mod-B (shorten the chain)
 Mod-C (repoint the chain)
   $ echo '#define MY_CONST 13' > example/defs3.h
   $ echo '#include "defs3.h"' > example/defs.h
-  $ ./jenga.exe build -c. -m
+  $ jenga build -m
   elaborated 6 rules and 6 targets
   materalizing all targets
   A: gcc -MG -MM main.c > main.d

@@ -1,7 +1,13 @@
 
-Get me a jenga executable and the source code for the first example...
+Get me a jenga executable and make a script to run it with a local cache
 
   $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
+  $ echo 'exec ./jenga.exe "$@" --cache=.' > jenga
+  $ chmod +x jenga
+  $ export PATH=.:$PATH
+
+Get me the source code for the first example...
+
   $ cp -rp $TESTDIR/example-01-two-files example
 
 What have I got?
@@ -13,10 +19,11 @@ What have I got?
   ./example/fib.c
   ./example/main.c
   ./example/build.jenga
+  ./jenga
 
 Build from clean:
 
-  $ ./jenga.exe build --cache=.
+  $ jenga build
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   A: gcc -c fib.c -o fib.o
@@ -38,13 +45,13 @@ Run the built artifact:
 
 Rebuild after no changes:
 
-  $ ./jenga.exe build -c.
+  $ jenga build
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
 
 Add '-x' flag for a more detailed logging.
 
-  $ ./jenga.exe build -c. -x
+  $ jenga build -x
   X: md5sum example/build.jenga
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
@@ -54,7 +61,7 @@ Add '-x' flag for a more detailed logging.
 Add '-xi flags for very detailed logging. Test will be fragile to any change in example source.
 We take care to mask any pids referenced by sanboxes
 
-  $ ./jenga.exe build -c. -xi | sed 's|jbox/[0-9]*|jbox/$$|'
+  $ jenga build -xi | sed 's|jbox/[0-9]*|jbox/$$|'
   I: rm -rf ,jenga
   I: mkdir -p .cache/jenga/files
   I: mkdir -p .cache/jenga/traces
@@ -65,6 +72,7 @@ We take care to mask any pids referenced by sanboxes
   I: test -d jenga.exe
   I: test -d .cache
   I: test -d example
+  I: test -d jenga
   I: test -d ,jenga
   I: ls example
   I: test -d example/fib.c
@@ -105,7 +113,7 @@ We take care to mask any pids referenced by sanboxes
 Update main.c "world->UNIVERSE" and rerun:
 
   $ sed -i 's/world/UNIVERSE/g' example/main.c
-  $ ./jenga.exe build -c.
+  $ jenga build
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   A: gcc -c main.c -o main.o
@@ -117,7 +125,7 @@ Update main.c "world->UNIVERSE" and rerun:
 Reverting to previous state of main.c causes no rebuilding:
 
   $ sed -i 's/UNIVERSE/world/g' example/main.c
-  $ ./jenga.exe build -c.
+  $ jenga build
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   $ ,jenga/example/main.exe
@@ -126,7 +134,7 @@ Reverting to previous state of main.c causes no rebuilding:
 Whitespace only change to main.c cause no link step (early cutoff):
 
   $ sed -i 's/int main/int      main/g' example/main.c
-  $ ./jenga.exe build -c.
+  $ jenga build
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   A: gcc -c main.c -o main.o
@@ -135,7 +143,7 @@ Whitespace only change to main.c cause no link step (early cutoff):
 Update build rules to link executable under a different name:
 
   $ sed -i 's/main.exe/RENAMED.exe/' example/build.jenga
-  $ ./jenga.exe build -c.
+  $ jenga build
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   A: gcc fib.o main.o -o RENAMED.exe
@@ -152,7 +160,7 @@ Update build rules to link executable under a different name:
 Relocate the example to a new directory; no rebuilds:
 
   $ mv example RELOCATED
-  $ ./jenga.exe build -c.
+  $ jenga build
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
 
@@ -164,7 +172,7 @@ Relocate the example to a new directory; no rebuilds:
 Duplicate the example directory; double elaborated rules; still no rebuilds:
 
   $ cp -rp RELOCATED ANOTHER
-  $ ./jenga.exe build -c.
+  $ jenga build
   elaborated 6 rules and 6 targets
   materalizing 2 artifacts
 
@@ -178,7 +186,7 @@ Duplicate the example directory; double elaborated rules; still no rebuilds:
 Modify code in one of the example directories; minimal rebuild as required:
 
   $ sed -i 's/fib(10)/fib(20)/g' RELOCATED/main.c
-  $ ./jenga.exe build -c.
+  $ jenga build
   elaborated 6 rules and 6 targets
   materalizing 2 artifacts
   A: gcc -c main.c -o main.o
@@ -194,7 +202,7 @@ Run the two versions:
 
 Materalize all targets:
 
-  $ ./jenga.exe build -c. -m
+  $ jenga build -m
   elaborated 6 rules and 6 targets
   materalizing all targets
 
@@ -211,7 +219,7 @@ Materalize all targets:
 
 Materalize just artifacts:
 
-  $ ./jenga.exe build -c.
+  $ jenga build
   elaborated 6 rules and 6 targets
   materalizing 2 artifacts
 
@@ -225,7 +233,7 @@ Materalize just artifacts:
 Remove one directory copy
 
   $ rm -rf RELOCATED
-  $ ./jenga.exe build -c.
+  $ jenga build
   elaborated 3 rules and 3 targets
   materalizing 1 artifact
   $ find ,jenga
@@ -236,12 +244,12 @@ Remove one directory copy
 Mod some more, try -q
 
   $ sed -i 's/fib(10)/fib(11)/g' ANOTHER/main.c
-  $ ./jenga.exe build -c. -q
+  $ jenga build -q
   $ ,jenga/ANOTHER/RENAMED.exe
   hello, 89 world
 
 Mod again, use "jenga run"
 
   $ sed -i 's/fib(11)/fib(12)/g' ANOTHER/main.c
-  $ ./jenga.exe run -c. ANOTHER/RENAMED.exe
+  $ jenga run ANOTHER/RENAMED.exe
   hello, 144 world

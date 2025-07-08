@@ -1,9 +1,13 @@
 
   $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
+  $ echo 'exec ./jenga.exe "$@" --cache=.' > jenga
+  $ chmod +x jenga
+  $ export PATH=.:$PATH
   $ cp -rp $TESTDIR/example-11-optional-dep example
 
 Build:
-  $ ./jenga.exe build -c.
+
+  $ jenga build
   elaborated 2 rules and 2 targets
   materalizing 1 artifact
   A: gcc -c $(test -f CFLAGS && cat CFLAGS) main.c
@@ -11,13 +15,15 @@ Build:
   ran 2 actions
 
 Zero build:
-  $ ./jenga.exe build -c.
+
+  $ jenga build
   elaborated 2 rules and 2 targets
   materalizing 1 artifact
 
 Define CFLAGS; rebuilds:
+
   $ echo '-O2' > example/CFLAGS
-  $ ./jenga.exe build -c.
+  $ jenga build
   elaborated 2 rules and 2 targets
   materalizing 1 artifact
   A: gcc -c $(test -f CFLAGS && cat CFLAGS) main.c
@@ -25,8 +31,9 @@ Define CFLAGS; rebuilds:
   ran 2 actions
 
 Change CFLAGS; rebuilds:
+
   $ echo '-Wall' > example/CFLAGS
-  $ ./jenga.exe build -c.
+  $ jenga build
   elaborated 2 rules and 2 targets
   materalizing 1 artifact
   A: gcc -c $(test -f CFLAGS && cat CFLAGS) main.c
@@ -36,7 +43,8 @@ Change CFLAGS; rebuilds:
   ran 1 action
 
 Remove CFLAGS; reuse original build:
+
   $ rm example/CFLAGS
-  $ ./jenga.exe build -c.
+  $ jenga build
   elaborated 2 rules and 2 targets
   materalizing 1 artifact

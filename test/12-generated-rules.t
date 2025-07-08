@@ -1,10 +1,13 @@
 
   $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
+  $ echo 'exec ./jenga.exe "$@" --cache=.' > jenga
+  $ chmod +x jenga
+  $ export PATH=.:$PATH
   $ cp -rp $TESTDIR/example-12-generated-rules example
 
 Build:
 
-  $ ./jenga.exe build -c. && ,jenga/example/hello.exe
+  $ jenga build && ,jenga/example/hello.exe
   A: cat all.files | grep '.c$' > c.files
   A: cat c.files | sed 's|\(.*\).c$|\1.o : @depends : gcc -c -o \1.o \1.c|' > c.rules
   elaborated 8 rules and 8 targets
@@ -21,7 +24,7 @@ Build:
 Change & rebuild:
 
   $ sed -i 's/10/11/' example/defs.h
-  $ ./jenga.exe build -c. && ,jenga/example/hello.exe
+  $ jenga build && ,jenga/example/hello.exe
   elaborated 8 rules and 8 targets
   materalizing 5 artifacts
   A: gcc -MG -MM $(cat c.files) > depends
@@ -43,7 +46,7 @@ Artifacts:
 
 Artifacts (materialize all)
 
-  $ ./jenga.exe build -c. -m
+  $ jenga build -m
   elaborated 8 rules and 8 targets
   materalizing all targets
   $ find ,jenga
@@ -60,7 +63,7 @@ Artifacts (materialize all)
 
 Targets:
 
-  $ ./jenga.exe build -c. -t
+  $ jenga build -t
   example/all.files
   example/c.files
   example/c.rules
@@ -73,7 +76,7 @@ Targets:
 
 Rules:
 
-  $ ./jenga.exe build -c. -r
+  $ jenga build -r
   example/main.o : example/main.c example/fib.h example/defs.h
     gcc -c -o main.o main.c
   

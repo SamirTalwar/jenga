@@ -1,9 +1,12 @@
 
   $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
+  $ echo 'exec ./jenga.exe "$@" --cache=.' > jenga
+  $ chmod +x jenga
+  $ export PATH=.:$PATH
   $ cp -rp $TESTDIR/example-07-scanner-deps example
 
 Initial build
-  $ ./jenga.exe build -c. -m
+  $ jenga build -m
   elaborated 5 rules and 5 targets
   materalizing all targets
   A: gcc -MG -MM fib.c > fib.d
@@ -23,7 +26,7 @@ Inspect the generated deps
   fib.o: fib.c fib.h
 
   $ echo '#define MY_CONST 11' > example/defs.h
-  $ ./jenga.exe build -c.
+  $ jenga build
   elaborated 5 rules and 5 targets
   materalizing 1 artifact
   A: gcc -c main.c -o main.o
