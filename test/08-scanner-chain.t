@@ -3,7 +3,7 @@
   $ echo 'exec ./jenga.exe "$@" --cache=.' > jenga
   $ chmod +x jenga
   $ export PATH=.:$PATH
-  $ cp -rp $TESTDIR/example-08-scanner-chain example
+  $ cp -rp $TESTDIR/../examples/08-scanner-chain example
 
 Initial build
   $ jenga build -m

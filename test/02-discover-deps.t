@@ -8,7 +8,7 @@ Get me a jenga executable and make a script to run it with a local cache
 
 Get me the source code for the first example...
 
-  $ cp -rp $TESTDIR/example-02-discover-deps example
+  $ cp -rp $TESTDIR/../examples/02-discover-deps example
 
 Build from clean:
   $ jenga build

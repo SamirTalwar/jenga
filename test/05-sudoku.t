@@ -3,7 +3,7 @@
   $ echo 'exec ./jenga.exe "$@" --cache=.' > jenga
   $ chmod +x jenga
   $ export PATH=.:$PATH
-  $ cp -rp $TESTDIR/example-05-sudoku example
+  $ cp -rp $TESTDIR/../examples/05-sudoku example
 
   $ jenga build
   elaborated 7 rules and 8 targets

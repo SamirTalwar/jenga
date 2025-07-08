@@ -8,7 +8,7 @@ Get me a jenga executable and make a script to run it with a local cache
 
 Get me the source code for the first example...
 
-  $ cp -rp $TESTDIR/example-01-two-files example
+  $ cp -rp $TESTDIR/../examples/01-two-files example
 
 What have I got?
 
