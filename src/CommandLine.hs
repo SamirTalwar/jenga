@@ -67,7 +67,20 @@ listRules = sharedOptions
 
 buildCommand :: Parser Config
 buildCommand = sharedOptions
-  <*> pure ModeBuild
+  <*>
+  (
+    flag' ModeListTargets
+    (short 't'
+      <> long "list-targets"
+      <> help "List all buildable targets")
+    <|>
+    flag' ModeListRules
+    (short 'r'
+      <> long "list-rules"
+      <> help "List all rules (building scanner dependecies if necessary)")
+    <|>
+    pure ModeBuild
+  )
   <*>
   many (strArgument (metavar "DIRS"
                       <> help "directories containing build rules"))
