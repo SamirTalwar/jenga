@@ -1,6 +1,6 @@
 module Engine (engineMain) where
 
-import CommandLine (LogMode(..),Config(..),BuildMode(..))
+import CommandLine (LogMode(..),Config(..),BuildMode(..),CacheDirSpec(..))
 import CommandLine qualified (exec)
 import Control.Exception (try,SomeException)
 import Control.Monad (ap,liftM)
@@ -29,14 +29,21 @@ type UserProg = [String] -> G ()
 
 engineMain :: UserProg -> IO ()
 engineMain userProg = do
-  config@Config{cacheParentOverride} <- CommandLine.exec
-  cacheDirParent <-
-    case cacheParentOverride of
-      Nothing -> Loc <$> getHomeDirectory
-      Just dir -> pure (Loc dir)
-  let cacheDir = cacheDirParent </> ".cache/jenga"
- -- printf "cache = %s\n" (show cacheDir)
+  config@Config{cacheDirSpec} <- CommandLine.exec
   myPid <- getCurrentPid
+
+  cacheDir <-
+    case cacheDirSpec of
+      CacheDirDefault -> do
+        home <- getHomeDirectory
+        pure (Loc home </> ".cache/jenga")
+      CacheDirChosen dir -> do
+        pure (Loc dir  </> ".cache/jenga")
+      CacheDirTemp -> do
+        let loc = Loc (printf "/tmp/.cache/jenga/%s" (show myPid))
+        printf "using temporary cache: %s\n" (show loc)
+        pure loc
+
   elaborateAndBuild myPid cacheDir config userProg
 
 elaborateAndBuild :: Pid -> Loc -> Config -> UserProg -> IO ()

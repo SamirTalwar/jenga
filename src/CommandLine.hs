@@ -1,4 +1,7 @@
-module CommandLine (LogMode(..),Config(..),BuildMode(..),exec) where
+module CommandLine
+  ( LogMode(..),Config(..),BuildMode(..), CacheDirSpec(..)
+  , exec
+  ) where
 
 import Options.Applicative
 
@@ -8,13 +11,15 @@ data Config = Config
   { logMode :: LogMode
   , seeX :: Bool
   , seeI :: Bool
-  , cacheParentOverride :: Maybe String -- Nothing: means use default in $HOME
+  , cacheDirSpec :: CacheDirSpec
   , keepSandBoxes :: Bool
   , materializeAll :: Bool
   , reverseDepsOrder :: Bool -- experiment for concurrent jengas
   , buildMode :: BuildMode
   , args :: [FilePath]
   }
+
+data CacheDirSpec = CacheDirDefault | CacheDirChosen String | CacheDirTemp
 
 data BuildMode
   = ModeListTargets
@@ -72,12 +77,12 @@ buildCommand = sharedOptions
     flag' ModeListTargets
     (short 't'
       <> long "list-targets"
-      <> help "List all buildable targets")
+      <> help "List buildable targets")
     <|>
     flag' ModeListRules
     (short 'r'
       <> long "list-rules"
-      <> help "List all rules (building scanner dependecies if necessary)")
+      <> help "List generated rules")
     <|>
     pure ModeBuild
   )
@@ -113,20 +118,25 @@ sharedOptions = Config
   )
   <*> switch (short 'x' <> help "Log execution of externally run commands")
   <*> switch (short 'i' <> help "Log execution of internal file system access")
-  <*> (
-  Just <$> strOption
+  <*>
+  (
+    CacheDirChosen <$> strOption
     (short 'c' <> long "cache" <> metavar "DIR"
      <> help "Use .cache/jenga in DIR instead of $HOME"
     )
-    <|> pure Nothing
+    <|>
+    flag' CacheDirTemp
+    (short 'f' <> long "temporary-cache"
+     <> help "Build using temporary cache to force build actions")
+    <|> pure CacheDirDefault
   )
   <*>
   switch (short 'k' <> long "keep-sandboxes"
-          <> help "Keep all sandboxes when build completes")
+          <> help "Keep sandboxes when build completes")
   <*>
   -- TODO: simpler to just always materialize all targets build?
   switch (short 'm' <> long "materialize-all"
           <> help "Materialize all targets; not just declared artifacts")
   <*>
   switch (long "reverse"
-          <> help "Build dependencies in reverse order; experiment for concurrent jenga")
+          <> help "Reverse dependencies ordering; dev experiment!")
