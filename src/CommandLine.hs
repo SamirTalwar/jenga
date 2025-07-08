@@ -5,7 +5,7 @@ module CommandLine
 
 import Options.Applicative
 
-data LogMode = LogQuiet | LogNormal | LogVerbose
+data LogMode = LogQuiet | LogActions | LogVerbose
 
 data Config = Config
   { logMode :: LogMode
@@ -57,21 +57,21 @@ subCommands =
 
 
 listTargets :: Parser Config
-listTargets = sharedOptions
+listTargets = sharedOptions LogQuiet
   <*> pure ModeListTargets
   <*>
   many (strArgument (metavar "DIRS"
                       <> help "directories containing build rules"))
 
 listRules :: Parser Config
-listRules = sharedOptions
+listRules = sharedOptions LogQuiet
   <*> pure ModeListRules
   <*>
   many (strArgument (metavar "DIRS"
                       <> help "directories containing build rules"))
 
 buildCommand :: Parser Config
-buildCommand = sharedOptions
+buildCommand = sharedOptions LogActions
   <*>
   (
     flag' ModeListTargets
@@ -91,7 +91,7 @@ buildCommand = sharedOptions
                       <> help "directories containing build rules"))
 
 runCommand :: Parser Config
-runCommand = sharedOptions
+runCommand = sharedOptions LogQuiet
   <*> (
   ModeBuildAndRun <$>
     strArgument (metavar "EXE-TARGET"
@@ -104,17 +104,20 @@ runCommand = sharedOptions
   pure []
 
 
-sharedOptions :: Parser (BuildMode -> [FilePath] -> Config)
-sharedOptions = Config
+sharedOptions :: LogMode -> Parser (BuildMode -> [FilePath] -> Config)
+sharedOptions defaultLogMode = Config
   <$>
   (
     flag' LogVerbose
     (short 'v' <> help "Log build-targets checked")
     <|>
+    flag' LogActions
+    (short 'a' <> help "Build showing actions run")
+    <|>
     flag' LogQuiet
     (short 'q' <> help "Build quietly, except for errors")
     <|>
-    pure LogNormal -- see user actions + counts
+    pure defaultLogMode
   )
   <*> switch (short 'x' <> help "Log execution of externally run commands")
   <*> switch (short 'i' <> help "Log execution of internal file system access")

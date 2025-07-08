@@ -29,7 +29,8 @@ type UserProg = [String] -> G ()
 
 engineMain :: UserProg -> IO ()
 engineMain userProg = do
-  config@Config{cacheDirSpec} <- CommandLine.exec
+  config@Config{cacheDirSpec,logMode} <- CommandLine.exec
+  let see = case logMode of LogQuiet -> False; _ -> True
   myPid <- getCurrentPid
 
   cacheDir <-
@@ -41,13 +42,14 @@ engineMain userProg = do
         pure (Loc dir  </> ".cache/jenga")
       CacheDirTemp -> do
         let loc = Loc (printf "/tmp/.cache/jenga/%s" (show myPid))
-        printf "using temporary cache: %s\n" (show loc)
+        when see $ printf "using temporary cache: %s\n" (show loc)
         pure loc
 
   elaborateAndBuild myPid cacheDir config userProg
 
 elaborateAndBuild :: Pid -> Loc -> Config -> UserProg -> IO ()
-elaborateAndBuild myPid cacheDir config@Config{buildMode,args,materializeAll} userProg = do
+elaborateAndBuild myPid cacheDir config@Config{buildMode,args,materializeAll,logMode} userProg = do
+  let see = case logMode of LogQuiet -> False; _ -> True
   case buildMode of
     ModeListTargets -> do
       i <- runB myPid cacheDir config $ do
@@ -56,7 +58,7 @@ elaborateAndBuild myPid cacheDir config@Config{buildMode,args,materializeAll} us
         let System{how} = system
         let allTargets = Map.keys how
         sequence_ [ BLog (show key) | key <- allTargets ]
-      when (i>0) $ do
+      when (see && i>0) $ do
         printf "ran %s\n" (pluralize i "action")
     ModeListRules -> do
       i <- runB myPid cacheDir config $ do
@@ -72,17 +74,17 @@ elaborateAndBuild myPid cacheDir config@Config{buildMode,args,materializeAll} us
                    , not ruleHidden
                    ]
         BLog (intercalate "\n\n" (map show staticRules))
-      when (i>0) $ do
+      when (see && i>0) $ do
         printf "ran %s\n" (pluralize i "action")
     ModeBuild -> do
       i <- runB myPid cacheDir config $ do
         initDirs
         system <- runElaboration config (userProg args)
-        reportSystem system
-        BLog $ printf "materalizing %s"
+        reportSystem config system
+        when see $ BLog $ printf "materalizing %s"
           (if materializeAll then "all targets" else (pluralize (length (artifacts system)) "artifact"))
         buildWithSystem config system
-      when (i>0) $ do
+      when (see && i>0) $ do
         printf "ran %s\n" (pluralize i "action")
     ModeBuildAndRun target argsForTarget -> do
       _i <- runB myPid cacheDir config $ do
@@ -121,12 +123,13 @@ seeKeys = intercalate " " . map show
 pluralize :: Int -> String -> String
 pluralize n what = printf "%d %s%s" n what (if n == 1 then "" else "s")
 
-reportSystem :: System -> B ()
-reportSystem system = do
+reportSystem :: Config -> System -> B ()
+reportSystem Config{logMode} system = do
+  let see = case logMode of LogQuiet -> False; _ -> True
   let System{rules} = system
   let nRules = sum [ if hidden then 0 else 1 | Rule{hidden} <- rules ]
   let nTargets = sum [ length targets |  Rule{targets,hidden} <- rules, not hidden ]
-  BLog $ printf "elaborated %s and %s" (pluralize nRules "rule") (pluralize nTargets "target")
+  when see $ BLog $ printf "elaborated %s and %s" (pluralize nRules "rule") (pluralize nTargets "target")
 
 buildAndMaterialize :: Config -> How -> Key -> B ()
 buildAndMaterialize config how key = do
@@ -308,7 +311,6 @@ gatherDeps config how d = loop d [] k0
         k xs contents
       DExistsKey key -> do
         b <- existsKey how key
-        --Execute (XLog (printf "exists: %s -> %s" (show key) (show b)))
         k xs b
 
 readKey :: Config -> How -> Key -> B String
@@ -535,8 +537,9 @@ data B a where -- TODO: BFail?
   BYield :: B ()
 
 runB :: Pid -> Loc -> Config -> B () -> IO Int
-runB myPid cacheDir config@Config{keepSandBoxes} b = runX config $ do
-  when keepSandBoxes $ XLog (printf "sandboxes created in: %s" (show sandboxParent))
+runB myPid cacheDir config@Config{keepSandBoxes,logMode} b = runX config $ do
+  let see = case logMode of LogQuiet -> False; _ -> True
+  when (see && keepSandBoxes) $ XLog (printf "sandboxes created in: %s" (show sandboxParent))
   loop b state0 k0
   where
     -- TODO: We should cleanup our sandbox dir on abort.
@@ -607,7 +610,6 @@ runB myPid cacheDir config@Config{keepSandBoxes} b = runX config $ do
 
     next :: BState -> X Int
     next s@BState{active,blocked} = do
-      --XLog (printf "next: %d/%d" (length active) (length blocked))
       case active of
         j:active -> resume j s { active }
         [] -> case blocked of
@@ -691,7 +693,6 @@ runX Config{logMode,seeX,seeI} = loop
         putStr stdout
         putStr stderr
         let ok = case exitCode of ExitSuccess -> True; ExitFailure{} -> False
-        --logA $ printf "cd %s; %s --> %s" dir command (show ok)
         pure ok
 
       -- other commands with shell out to external process
@@ -709,7 +710,6 @@ runX Config{logMode,seeX,seeI} = loop
       XGlob (Loc fp) -> do
         logI $ printf "ls %s" fp
         xs <- listDirectory fp
-        -- logI $ printf "ls %s --> %s" fp (show xs)
         pure [ Loc fp </> x | x <- xs ]
       XFileExists (Loc fp) -> do
         logI $ printf "test -e %s" fp
@@ -748,5 +748,4 @@ myCreateLink a b = do
   try (createLink a b) >>= \case
     Right () -> pure True
     Left (_e::SomeException) -> do
-      --printf "myCreateLink: caught %s\n" (show _e)
       pure False

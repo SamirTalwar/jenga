@@ -221,3 +221,27 @@ Materalize just artifacts:
   ,jenga/ANOTHER/RENAMED.exe
   ,jenga/RELOCATED
   ,jenga/RELOCATED/RENAMED.exe
+
+Remove one directory copy
+
+  $ rm -rf RELOCATED
+  $ ./jenga.exe build -c.
+  elaborated 3 rules and 3 targets
+  materalizing 1 artifact
+  $ find ,jenga
+  ,jenga
+  ,jenga/ANOTHER
+  ,jenga/ANOTHER/RENAMED.exe
+
+Mod some more, try -q
+
+  $ sed -i 's/fib(10)/fib(11)/g' ANOTHER/main.c
+  $ ./jenga.exe build -c. -q
+  $ ,jenga/ANOTHER/RENAMED.exe
+  hello, 89 world
+
+Mod again, use "jenga run"
+
+  $ sed -i 's/fib(11)/fib(12)/g' ANOTHER/main.c
+  $ ./jenga.exe run -c. ANOTHER/RENAMED.exe
+  hello, 144 world
