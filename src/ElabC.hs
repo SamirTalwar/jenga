@@ -18,10 +18,11 @@ setupLinkRule exe xs =
   let obs = [ mkKey x ".o" | x <- xs ]
   GRule $ Rule
     { tag = printf "link:%s" (show exe)
+    , hidden = False
     , targets = [exe]
     , depcom = do
         mapM_ DNeed obs
-        pure $ Bash (printf "gcc %s -o %s" (baseKeys obs) (baseKey exe))
+        pure $ bash $ printf "gcc %s -o %s" (baseKeys obs) (baseKey exe)
     }
 
 setupCruleWithDeps :: Loc -> G ()
@@ -49,13 +50,14 @@ parseDepsFile contents =
 ccCompileRule :: Key -> Key -> D () -> Rule
 ccCompileRule o c cDeps = Rule
   { tag = printf "cc:%s" (show o)
+  , hidden = False
   , targets = [o]
   , depcom = do
       cDeps
       readOpt (Key (dirKey c </> "cflags")) >>= \case
-        Nothing -> pure $ Bash (printf "gcc -c %s -o %s" (baseKey c) (baseKey o))
+        Nothing -> pure $ bash $ printf "gcc -c %s -o %s" (baseKey c) (baseKey o)
         Just cflags ->
-          pure $ Bash (printf "gcc %s -c %s -o %s" cflags (baseKey c) (baseKey o))
+          pure $ bash $ printf "gcc %s -c %s -o %s" cflags (baseKey c) (baseKey o)
   }
 
 
@@ -71,8 +73,12 @@ readOpt key = do
 ccDepsRule :: Key -> Key  -> Rule
 ccDepsRule d c = Rule
   { tag = printf "cc:%s" (show d)
+  , hidden = False
   , targets = [d]
   , depcom = do
       DNeed c
-      pure $ Bash (printf "gcc -MG -MM %s -MF %s" (baseKey c) (baseKey d))
+      pure $ bash $ printf "gcc -MG -MM %s -MF %s" (baseKey c) (baseKey d)
   }
+
+bash :: String -> Action
+bash command = Action { hidden = False, command }

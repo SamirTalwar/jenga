@@ -56,10 +56,13 @@ elaborateAndBuild myPid cacheDir config@Config{buildMode,args,materializeAll} us
         initDirs
         system <- runElaboration config (userProg args)
         let System{how,rules} = system
-        staticRules <-
-          sequence [ do (deps,action) <- gatherDeps config how depcom
-                        pure $ StaticRule { tag, targets, deps, action }
-                   | Rule{tag,targets,depcom} <- rules
+        staticRules :: [StaticRule] <- concat <$>
+          sequence [ do (deps,action@Action{hidden=actionHidden}) <- gatherDeps config how depcom
+                        pure [ StaticRule { tag, targets, deps, action }
+                             | not actionHidden
+                             ]
+                   | Rule{tag,hidden=ruleHidden,targets,depcom} <- rules
+                   , not ruleHidden
                    ]
         BLog (intercalate "\n\n" (map show staticRules))
       when (i>0) $ do
@@ -83,8 +86,8 @@ elaborateAndBuild myPid cacheDir config@Config{buildMode,args,materializeAll} us
 
 buildWithSystem :: Config -> System -> B ()
 buildWithSystem config@Config{materializeAll,reverseDepsOrder} system = do
-  let System{artifacts,how} = system
-  let allTargets = Map.keys how
+  let System{artifacts,rules,how} = system
+  let allTargets = [ target | Rule{hidden,targets} <- rules, target <- targets, not hidden ]
   let whatToBuild = if materializeAll then allTargets else artifacts
   _ :: [()] <- parallel [ buildAndMaterialize config how key
                         | key <- (if reverseDepsOrder then reverse whatToBuild else whatToBuild)
@@ -100,9 +103,10 @@ data StaticRule = StaticRule
 
 -- TODO: this display of static rules does not take account of the fact that the
 -- action is relative and designed to be run in a sandbox.
+-- We can improve this simply by prefixing with "cd dir; "
 instance Show StaticRule where
-  show StaticRule{targets,deps,action} = do
-    printf "%s : %s\n  %s" (seeKeys targets) (seeKeys deps) (show action)
+  show StaticRule{targets,deps,action=Action{command}} = do
+    printf "%s : %s\n  %s" (seeKeys targets) (seeKeys deps) command
 
 seeKeys :: [Key] -> String
 seeKeys = intercalate " " . map show
@@ -112,10 +116,10 @@ pluralize n what = printf "%d %s%s" n what (if n == 1 then "" else "s")
 
 reportSystem :: System -> B ()
 reportSystem system = do
-  let System{rules,how} = system
-  BLog $ printf "elaborated %s and %s"
-    (pluralize (length rules) "rule")
-    (pluralize (length how) "target")
+  let System{rules} = system
+  let nRules = sum [ if hidden then 0 else 1 | Rule{hidden} <- rules ]
+  let nTargets = sum [ length targets |  Rule{targets,hidden} <- rules, not hidden ]
+  BLog $ printf "elaborated %s and %s" (pluralize nRules "rule") (pluralize nTargets "target")
 
 buildAndMaterialize :: Config -> How -> Key -> B ()
 buildAndMaterialize config how key = do
@@ -123,9 +127,9 @@ buildAndMaterialize config how key = do
   materialize digest key
 
 materialize :: Digest -> Key -> B ()
-materialize digest (Key loc) = do
+materialize digest key = do
   cacheFile <- cacheFile digest
-  let materializedFile = artifactsDir </> show loc
+  let materializedFile = artifactsDir </> show key
   Execute $ do
     XMakeDir (dirLoc materializedFile)
     XHardLink cacheFile materializedFile >>= \case
@@ -318,12 +322,12 @@ existsKey how key =
 buildWithRule :: Config -> Action -> WitMap -> Rule -> B WitMap
 buildWithRule Config{keepSandBoxes} action depWit rule = do
   sandbox <- BNewSandbox
-  let Rule{targets} = rule
+  let Rule{tag,targets} = rule
   Execute (XMakeDir sandbox)
   setupInputs sandbox depWit
-  exploreYield (Execute (XRunActionInDir sandbox action)) >>= \case
+  BRunActionInDir sandbox action >>= \case
     False ->
-      error (printf "user action failed for rule: '%s'" (show rule))
+      error (printf "user action failed for rule: '%s'" tag)
     True -> do
       targetWit <- cacheOutputs sandbox targets
       when (not keepSandBoxes) $ Execute (XRemoveDirRecursive sandbox)
@@ -407,9 +411,10 @@ instance Show Digest where show (Digest str) = str
 
 data Witness = Witness { key :: WitnessKey, val :: WitnessValue }
 
-data WitnessKey = WitnessKey { action :: Action, wdeps :: WitMap } deriving Show
-
 data WitnessValue = WitnessValue { wtargets :: WitMap }
+
+-- TODO: just command in WitnessKey? hidden dont matter
+data WitnessKey = WitnessKey { action :: Action, wdeps :: WitMap } deriving Show
 
 data WitMap = WitMap (Map Loc Digest) deriving Show
 
@@ -484,7 +489,7 @@ type QDigest = String
 toQ :: Witness -> QWitness
 toQ wit = do
   let Witness{key,val} = wit
-  let WitnessKey{action=Bash command,wdeps} = key
+  let WitnessKey{action=Action{command},wdeps} = key
   let WitnessValue{wtargets} = val
   let fromStore (WitMap m) = [ (fp,digest) | (Loc fp,Digest digest) <- Map.toList m ]
   WIT { command, deps = fromStore wdeps, targets = fromStore wtargets }
@@ -492,7 +497,7 @@ toQ wit = do
 fromQ :: QWitness -> Witness
 fromQ WIT{command,deps,targets} = do
   let toStore xs = WitMap (Map.fromList [ (Loc fp,Digest digest) | (fp,digest) <- xs ])
-  let key = WitnessKey{action=Bash command,wdeps = toStore deps}
+  let key = WitnessKey{action=Action{command,hidden=undefined},wdeps = toStore deps}
   let val = WitnessValue{wtargets = toStore targets}
   Witness{key,val}
 
@@ -515,6 +520,7 @@ data B a where -- TODO: BFail?
   BLog :: String -> B ()
   BCacheDir :: B Loc
   BNewSandbox :: B Loc
+  BRunActionInDir :: Loc -> Action -> B Bool
   Execute :: X a -> B a
   BGetKey :: Key -> B (Maybe Digest)
   BSetKey :: Key -> Digest -> B ()
@@ -532,12 +538,19 @@ runB myPid cacheDir config@Config{keepSandBoxes} b = runX config $ do
     -- Not the end of the day, but we could be cleaner.
     sandboxParentDirForThisProcess = Loc (printf "/tmp/.jbox/%s" (show myPid))
 
-    state0 = BState { sandboxCounter = 0, memo = Map.empty, active = [], blocked = [], hmap = HMap.empty }
+    state0 = BState
+      { sandboxCounter = 0
+      , runCounter = 0
+      , memo = Map.empty
+      , active = []
+      , blocked = []
+      , hmap = HMap.empty
+      }
 
     k0 :: BState -> () -> X Int
-    k0 BState{sandboxCounter=i} () = do
+    k0 BState{runCounter} () = do
       when (not keepSandBoxes) $ XRemoveDirRecursive sandboxParentDirForThisProcess
-      pure i
+      pure runCounter
 
     loop :: B a -> BState -> (BState -> a -> X Int) -> X Int
     loop m0 s k = case m0 of
@@ -547,7 +560,10 @@ runB myPid cacheDir config@Config{keepSandBoxes} b = runX config $ do
       BCacheDir -> k s cacheDir
       BNewSandbox -> do
         let BState{sandboxCounter=i} = s
-        k s { sandboxCounter = i+1 } (sandboxParentDirForThisProcess </> show i)
+        k s { sandboxCounter = 1 + i } (sandboxParentDirForThisProcess </> show i)
+      BRunActionInDir sandbox action@Action{hidden} -> do
+        bool <- XRunActionInDir sandbox action
+        k s { runCounter = runCounter s + (if hidden then 0 else 1) } bool
       Execute x -> do a <- x; k s a
       BGetKey key -> do
         let BState{memo} = s
@@ -594,13 +610,14 @@ runB myPid cacheDir config@Config{keepSandBoxes} b = runX config $ do
     resume :: BJob -> BState -> X Int
     resume (BJob p k) s = loop p s k
 
-exploreYield :: B a -> B a
+{-exploreYield :: B a -> B a
 exploreYield build = do
   --BYield -- TODO: not working right yet! -- runs 185 action instead of 47. lost memoization?
-  build
+  build-}
 
 data BState = BState
   { sandboxCounter :: Int
+  , runCounter :: Int -- less that sandboxCounter because of hidden actions
   , memo :: Map Key Digest
   , active :: [BJob]
   , blocked :: [BJob]
@@ -654,11 +671,12 @@ runX Config{logMode,seeX,seeI} = loop
       XLog s -> do putStrLn s
 
       -- sandboxed execution of user's action; for now always a bash command
-      XRunActionInDir (Loc dir) action -> do
-        let (Bash command) = action
-        -- Don't print sandbox dir as it contains $$ and so is not stable. Bad for testing!
-        -- logA $ printf "cd %s; %s" dir command
-        logA $ command
+      XRunActionInDir (Loc dir) Action{hidden,command} -> do
+        let showHidden = False -- command line flag?
+        if showHidden
+          then logA $ printf "%s%s" command (if hidden then " (hidden)" else "")
+          else when (not hidden) $ logA $ command
+
         (exitCode,stdout,stderr) <-
           withCurrentDirectory dir (readCreateProcessWithExitCode (shell command) "")
         -- TODO: better management & report of stdout/stderr

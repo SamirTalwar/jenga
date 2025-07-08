@@ -18,7 +18,7 @@ dispatch = \case
 
 elab :: Key -> G ()
 elab config  = do
-  -- _generateAllFileRule -- TODO: is there a better way?
+  allFilesRule
   elabRuleFile config
   where
 
@@ -40,12 +40,16 @@ elab config  = do
       Macro{name,arg} -> dispatch name (makeKey arg)
 
     elabTrip :: Trip -> G ()
-    elabTrip Trip{pos,targets,deps,action} = do
+    elabTrip Trip{pos,targets,deps,command} = do
       GRule $ Rule
         { tag = printf "rule@%s" (show pos)
+        , hidden = False
         , targets = map makeKey targets
-        , depcom = do sequence_ [ makeDep targets dep | dep <- deps ];  pure (Bash action)
+        , depcom = do sequence_ [ makeDep targets dep | dep <- deps ];  pure (bash command)
         }
+
+    bash :: String -> Action
+    bash command = Action { hidden = False, command }
 
     makeDep targets = \case
       DepPlain file -> DNeed (makeKey file)
@@ -62,45 +66,47 @@ elab config  = do
     makeKey :: String -> Key
     makeKey basename = Key (dirKey config </> basename)
 
-    -- special rule so user rules can access the list of all file names
-    _generateAllFileRule =  do
-      let dir = dirKey config
-      allFiles <- map Key <$> GGlob dir
-      GRule (Rule { tag = printf "glob-%s" (show dir)
-                  , targets = [ makeKey allFilesName ]
-                  , depcom = pure (Bash (printf "echo -n '%s' > %s"
-                                         (unlines (map baseKey allFiles))
-                                         allFilesName)) })
-
-    allFilesName = "all.files"
-
     selectArtifacts :: [Clause] -> [String]
     selectArtifacts clauses = do
       -- Only considering clauses which define rule-triples...
       -- Any target which isn't a deps is considered an artifcat
       let targets = [ key | ClauseTrip (Trip{targets}) <- clauses, key <- targets ]
       let deps = [ keyOfDep dep
-                 | ClauseTrip (Trip{deps}) <- clauses, dep <- deps ]
-                 ++ [ allFilesName ]
+                 | ClauseTrip (Trip{deps}) <- clauses, dep <- deps ] ++ [ allFilesName ]
       Set.toList (Set.fromList targets \\ Set.fromList deps)
 
+    -- hidden rule so user-rules can access the list of file names
+    allFilesName = "all.files"
+    allFilesRule =  do
+      let dir = dirKey config
+      allFiles <- map Key <$> GGlob dir
+      GRule (Rule { tag = printf "glob-%s" (show dir)
+                  , hidden = True
+                  , targets = [ makeKey allFilesName ]
+                  , depcom = pure (Action
+                                    { hidden = True
+                                    , command = printf "echo -n '%s' > %s"
+                                                (unlines (map baseKey allFiles))
+                                                allFilesName
+                                    })})
 
--- TODO: maybe cleaner to use par4 parser to parse the scanner deps!!
+
 filterDepsFor :: [String] -> String -> [String]
 filterDepsFor targets contents = do
   let
-    -- TODO: simplify/inline this code
-    parse1 :: String -> Maybe ([String],[String])
-    parse1 line =
+    parseDepsLine :: String -> [String]
+    parseDepsLine line =
       case splitOn ":" line of
-        [left,right] -> Just (words left, words right)
-        _ -> Nothing
-    parse :: String -> [String]
-    parse line =
-      case (parse1 line) of
-        Nothing -> [] -- comment or garbage we dont understand
-        Just (as,bs) -> if any (`elem` targets) as then bs else []
-  [ dep | line <- lines contents, dep <- parse line ]
+        -- If a 'deps' line contains a colon,
+        -- we regard names on the right as the list of deps,
+        -- but only take them if we target a name listed on the left.
+        [left,right] -> do
+          if any (`elem` targets) (words left) then words right else []
+        _ -> do
+          -- No colon: we take all the deps
+          words line
+
+  [ dep | line <- lines contents, dep <- parseDepsLine line ]
 
 
 data Clause = ClauseTrip Trip | ClauseMacro Macro | ClauseInclude String
@@ -111,7 +117,7 @@ data Trip = Trip
   { pos :: Position
   , targets :: [String]
   , deps :: [Dep]
-  , action :: String
+  , command :: String
   }
 
 data Dep
@@ -164,10 +170,10 @@ gram = start
       deps <- many dep
       alts [colon,newlineAndIndent]
       -- TODO: support comments in action body
-      action <- singleAcionLine
+      command <- singleCommandLine
       alts [nl,commentToEol]
       skip $ alts [nl,commentToEol]
-      pure (ClauseTrip (Trip {pos,targets,deps,action}))
+      pure (ClauseTrip (Trip {pos,targets,deps,command}))
 
     -- traditional make syntax
     newlineAndIndent = do
@@ -194,7 +200,7 @@ gram = start
 
     specialChar = (`elem` " :#()\n")
 
-    singleAcionLine = do
+    singleCommandLine = do
       trimTrailingSpace <$> some actionChar
 
     actionChar = sat $ \case -- anything upto a comment or NL

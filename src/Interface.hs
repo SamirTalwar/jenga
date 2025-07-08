@@ -27,11 +27,15 @@ data G a where
 
 data Rule = Rule
   { tag :: String
+  , hidden :: Bool
   , targets :: [Key]
   , depcom :: D Action
   }
 
-data Action = Bash String
+data Action = Action
+  { hidden :: Bool
+  , command :: String
+  }
 
 instance Functor D where fmap = liftM
 instance Applicative D where pure = DRet; (<*>) = ap
@@ -49,7 +53,6 @@ data Key = Key Loc deriving (Eq,Ord)
 
 data Loc = Loc FilePath deriving (Eq,Ord)
 
-instance Show Rule where show Rule{tag} = tag
-instance Show Action where show (Bash command) = command
+instance Show Action where show Action{command} = command
 instance Show Key where show (Key loc) = show loc
 instance Show Loc where show (Loc fp) = fp
