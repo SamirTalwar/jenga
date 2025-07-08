@@ -70,8 +70,8 @@ We take care to mask any pids referenced by sanboxes
   I: test -d example/fib.c
   I: test -d example/main.c
   I: test -d example/build.jenga
-  I: ls .
-  I: ls example
+  I: test -e build.jenga
+  I: test -e example/build.jenga
   I: ls example
   I: test -e example/all.files
   I: test -e example/build.jenga

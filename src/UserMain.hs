@@ -1,10 +1,9 @@
 module UserMain (main) where
 
-import Control.Monad (forM_)
 import MakeStyle qualified (elaborate)
 import Engine (engineMain)
 import Interface (G(..),Key(..),Loc(..))
-import StdBuildUtils (listBaseNamesWithSuffix)
+import StdBuildUtils ((</>))
 import Data.List.Ordered (nubSort)
 
 main :: IO ()
@@ -13,17 +12,16 @@ main = engineMain $ \args -> do
   xss <- mapM findStartingPointsFromTopLoc args'
   case nubSort (concat xss) of
     [] -> GFail "UserMain: nothing to build"
-    dirs -> mapM_ dispatchAllConfigs dirs
+    dirs -> mapM_ elaborateConfig dirs
 
--- TODO: simplify with find *.jenga
+elaborateConfig :: Loc -> G ()
+elaborateConfig dir = do
+  let config = dir </> "build.jenga"
+  GExists config >>= \case
+    True -> MakeStyle.elaborate (Key config)
+    False -> pure ()
 
-dispatchAllConfigs :: Loc -> G ()
-dispatchAllConfigs dir = do
-  configNames <- listBaseNamesWithSuffix dir ".jenga"-- TODO: only read "build.jenga" files
-  forM_ configNames $ \(Loc fullName) -> do
-    let config = Key (Loc (fullName ++ ".jenga"))
-    MakeStyle.elaborate config
-
+-- TODO: Maybe use find
 findStartingPointsFromTopLoc :: String -> G [Loc]
 findStartingPointsFromTopLoc arg = do
   let loc = Loc arg
