@@ -1,4 +1,4 @@
-module SimpleMake (elab) where
+module MakeStyle (elaborate) where
 
 import Data.List.Split (splitOn)
 import Data.Set ((\\))
@@ -16,8 +16,8 @@ dispatch = \case
 
 -- TODO: consider passing the "dir" context as read-info in the G monad
 
-elab :: Key -> G ()
-elab config  = do
+elaborate :: Key -> G ()
+elaborate config  = do
   allFilesRule
   elabRuleFile config
   where

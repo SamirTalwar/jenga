@@ -1,7 +1,7 @@
 module UserMain (main) where
 
 import Control.Monad (forM_)
-import SimpleMake qualified (elab)
+import MakeStyle qualified (elaborate)
 import Engine (engineMain)
 import Interface (G(..),Key(..),Loc(..))
 import StdBuildUtils (listBaseNamesWithSuffix)
@@ -22,8 +22,7 @@ dispatchAllConfigs dir = do
   configNames <- listBaseNamesWithSuffix dir ".jenga"-- TODO: only read "build.jenga" files
   forM_ configNames $ \(Loc fullName) -> do
     let config = Key (Loc (fullName ++ ".jenga"))
-    SimpleMake.elab config
-
+    MakeStyle.elaborate config
 
 findStartingPointsFromTopLoc :: String -> G [Loc]
 findStartingPointsFromTopLoc arg = do
