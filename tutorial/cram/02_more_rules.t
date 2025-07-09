@@ -21,9 +21,8 @@ Initial build. Expect 3 actions to be run
 
   $ jenga build && ,jenga/hello.exe
   elaborated 3 rules and 3 targets
-  materalizing 1 artifact
-  A: gcc -c -o main.o main.c
   A: gcc -c -o fib.o fib.c
+  A: gcc -c -o main.o main.c
   A: gcc -o hello.exe main.o fib.o
   ran 3 actions
   Hello, 55 jenga!
@@ -33,7 +32,6 @@ Running executable returns exit code 17
 
   $ jenga build && ,jenga/hello.exe
   elaborated 3 rules and 3 targets
-  materalizing 1 artifact
   Hello, 55 jenga!
   [17]
 
@@ -53,12 +51,11 @@ Add -Wall to both compile rule. Two actions get rerun.
 
   $ jenga build
   elaborated 3 rules and 3 targets
-  materalizing 1 artifact
+  A: gcc -c -Wall -o fib.o fib.c
   A: gcc -c -Wall -o main.o main.c
   main.c:3:6: warning: return type of 'main' is not 'int' [-Wmain]
       3 | void main() { // Oops! main should be declared to return int.
         |      ^~~~
-  A: gcc -c -Wall -o fib.o fib.c
   ran 2 actions
 
 Fix code. Compile of main.c and link are rerun
@@ -72,7 +69,6 @@ Fix code. Compile of main.c and link are rerun
   }
   $ jenga build && ,jenga/hello.exe
   elaborated 3 rules and 3 targets
-  materalizing 1 artifact
   A: gcc -c -Wall -o main.o main.c
   A: gcc -o hello.exe main.o fib.o
   ran 2 actions
@@ -99,13 +95,12 @@ Define and use header file. Build fails because we failed to declare dependecy o
 
   $ jenga build 2>&1 | grep -v 'called at'
   elaborated 3 rules and 3 targets
-  materalizing 1 artifact
-  A: gcc -c -Wall -o main.o main.c
-  main.c:2:10: fatal error: fib.h: No such file or directory
-      2 | #include "fib.h"
+  A: gcc -c -Wall -o fib.o fib.c
+  fib.c:1:10: fatal error: fib.h: No such file or directory
+      1 | #include "fib.h"
         |          ^~~~~~~
   compilation terminated.
-  jenga.exe: user action failed for rule: 'rule@5'0'
+  jenga.exe: user action failed for rule: 'rule@8'0'
   CallStack (from HasCallStack):
 
 Add missing dep to both compile rules
@@ -124,7 +119,6 @@ Add missing dep to both compile rules
 
   $ jenga build
   elaborated 3 rules and 3 targets
-  materalizing 1 artifact
-  A: gcc -c -Wall -o main.o main.c
   A: gcc -c -Wall -o fib.o fib.c
+  A: gcc -c -Wall -o main.o main.c
   ran 2 actions

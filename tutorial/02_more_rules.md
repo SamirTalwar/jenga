@@ -49,9 +49,8 @@ Jenga responds by running the three actions in the correct order as determined b
 ```
 $ jenga build && ,jenga/hello.exe
 elaborated 3 rules and 3 targets
-materalizing 1 artifact
-A: gcc -c -o main.o main.c
 A: gcc -c -o fib.o fib.c
+A: gcc -c -o main.o main.c
 A: gcc -o hello.exe main.o fib.o
 ran 3 actions
 Hello, 55 jenga!
@@ -81,12 +80,11 @@ Rebuild. Jenga knows that even though we didn't modify any source file, the comp
 ```
 $ jenga build
 elaborated 3 rules and 3 targets
-materalizing 1 artifact
+A: gcc -c -Wall -o fib.o fib.c
 A: gcc -c -Wall -o main.o main.c
 main.c:3:6: warning: return type of 'main' is not 'int' [-Wmain]
     3 | void main() { // Oops! main should be declared to return int.
       |      ^~~~
-A: gcc -c -Wall -o fib.o fib.c
 ran 2 actions
 ```
 
@@ -108,13 +106,11 @@ Rebuild. Jenga will rerun the compile step for the changed `main.c` (source has 
 ```
 $ jenga build && ,jenga/hello.exe
 elaborated 3 rules and 3 targets
-materalizing 1 artifact
-A: gcc -c -Wall -Werror -o main.o main.c
+A: gcc -c -Wall -o main.o main.c
 A: gcc -o hello.exe main.o fib.o
 ran 2 actions
 Hello, 55 jenga!
 ```
-
 
 Let make one final change to this example.
 It's common practise in C-code to `#include` a header file that provides a prototype for externally defined functions such as the call to `fib(10)` in `main.c`.
@@ -152,10 +148,9 @@ Unfortunately when we try to build, jenga will report an error.
 ```
 $ jenga build
 elaborated 3 rules and 3 targets
-materalizing 1 artifact
-A: gcc -c -Wall -Werror -o main.o main.c
-main.c:2:10: fatal error: fib.h: No such file or directory
-    2 | #include "fib.h"
+A: gcc -c -Wall -o fib.o fib.c
+fib.c:1:10: fatal error: fib.h: No such file or directory
+    1 | #include "fib.h"
       |          ^~~~~~~
 compilation terminated.
 ```
@@ -182,7 +177,6 @@ Rebuild is successful.
 ```
 $ jenga build
 elaborated 3 rules and 3 targets
-materalizing 1 artifact
 A: gcc -c -Wall -o main.o main.c
 A: gcc -c -Wall -o fib.o fib.c
 ran 2 actions

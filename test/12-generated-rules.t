@@ -11,7 +11,6 @@ Build:
   A: cat all.files | grep '.c$' > c.files
   A: cat c.files | sed 's|\(.*\).c$|\1.o : @depends : gcc -c -o \1.o \1.c|' > c.rules
   elaborated 8 rules and 8 targets
-  materalizing 5 artifacts
   A: cat all.files | grep '.h$' > h.files
   A: gcc -MG -MM $(cat c.files) > depends
   A: gcc -c -o main.o main.c
@@ -26,7 +25,6 @@ Change & rebuild:
   $ sed -i 's/10/11/' example/defs.h
   $ jenga build && ,jenga/example/hello.exe
   elaborated 8 rules and 8 targets
-  materalizing 5 artifacts
   A: gcc -MG -MM $(cat c.files) > depends
   A: gcc -c -o main.o main.c
   A: gcc -o hello.exe $(cat o.files)
@@ -40,15 +38,17 @@ Artifacts:
   ,jenga/example
   ,jenga/example/fib.o
   ,jenga/example/c.rules
+  ,jenga/example/c.files
   ,jenga/example/depends
   ,jenga/example/hello.exe
+  ,jenga/example/o.files
+  ,jenga/example/h.files
   ,jenga/example/main.o
 
 Artifacts (materialize all)
 
-  $ jenga build -m
+  $ jenga build
   elaborated 8 rules and 8 targets
-  materalizing all targets
   $ find ,jenga
   ,jenga
   ,jenga/example
@@ -64,15 +64,14 @@ Artifacts (materialize all)
 Targets:
 
   $ jenga build -t
-  example/all.files
-  example/c.files
+  example/main.o
+  example/fib.o
   example/c.rules
   example/depends
-  example/fib.o
   example/h.files
-  example/hello.exe
-  example/main.o
   example/o.files
+  example/c.files
+  example/hello.exe
 
 Rules:
 

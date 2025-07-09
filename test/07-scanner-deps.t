@@ -6,9 +6,8 @@
   $ cp -rp $TESTDIR/../examples/07-scanner-deps example
 
 Initial build
-  $ jenga build -m
+  $ jenga build
   elaborated 5 rules and 5 targets
-  materalizing all targets
   A: gcc -MG -MM fib.c > fib.d
   A: gcc -c fib.c -o fib.o
   A: gcc -MG -MM main.c > main.d
@@ -28,7 +27,6 @@ Inspect the generated deps
   $ echo '#define MY_CONST 11' > example/defs.h
   $ jenga build
   elaborated 5 rules and 5 targets
-  materalizing 1 artifact
   A: gcc -c main.c -o main.o
   A: gcc fib.o main.o -o main.exe
   ran 2 actions

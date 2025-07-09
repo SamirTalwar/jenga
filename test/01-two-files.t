@@ -25,7 +25,6 @@ Build from clean:
 
   $ jenga build
   elaborated 3 rules and 3 targets
-  materalizing 1 artifact
   A: gcc -c fib.c -o fib.o
   A: gcc -c main.c -o main.o
   A: gcc fib.o main.o -o main.exe
@@ -36,7 +35,9 @@ See the artifacts:
   $ find ,jenga
   ,jenga
   ,jenga/example
+  ,jenga/example/fib.o
   ,jenga/example/main.exe
+  ,jenga/example/main.o
 
 Run the built artifact:
 
@@ -47,14 +48,12 @@ Rebuild after no changes:
 
   $ jenga build
   elaborated 3 rules and 3 targets
-  materalizing 1 artifact
 
 Add '-x' flag for a more detailed logging.
 
   $ jenga build -x
   X: md5sum example/build.jenga
   elaborated 3 rules and 3 targets
-  materalizing 1 artifact
   X: md5sum example/fib.c
   X: md5sum example/main.c
 
@@ -90,7 +89,6 @@ We take care to mask any pids referenced by sanboxes
   I: test -e example/fib.o
   I: test -e example/main.exe
   elaborated 3 rules and 3 targets
-  materalizing 1 artifact
   I: test -e example/fib.c
   X: md5sum example/fib.c
   I: test -e .cache/jenga/files/3ec221831446382d711ea3ce24237158
@@ -108,6 +106,10 @@ We take care to mask any pids referenced by sanboxes
   I: test -e .cache/jenga/files/9efc05831ccef0c24b2697d8fff2acee
   I: mkdir -p ,jenga/example
   I: ln .cache/jenga/files/9efc05831ccef0c24b2697d8fff2acee ,jenga/example/main.exe
+  I: mkdir -p ,jenga/example
+  I: ln .cache/jenga/files/47a0ee09b975f7501dbeb5431b76c24c ,jenga/example/fib.o
+  I: mkdir -p ,jenga/example
+  I: ln .cache/jenga/files/aac22b6d9cbb6711115a1ebde2cfd6a1 ,jenga/example/main.o
   I: rm -rf /tmp/.jbox/$$
 
 Update main.c "world->UNIVERSE" and rerun:
@@ -115,7 +117,6 @@ Update main.c "world->UNIVERSE" and rerun:
   $ sed -i 's/world/UNIVERSE/g' example/main.c
   $ jenga build
   elaborated 3 rules and 3 targets
-  materalizing 1 artifact
   A: gcc -c main.c -o main.o
   A: gcc fib.o main.o -o main.exe
   ran 2 actions
@@ -127,7 +128,6 @@ Reverting to previous state of main.c causes no rebuilding:
   $ sed -i 's/UNIVERSE/world/g' example/main.c
   $ jenga build
   elaborated 3 rules and 3 targets
-  materalizing 1 artifact
   $ ,jenga/example/main.exe
   hello, 55 world
 
@@ -136,7 +136,6 @@ Whitespace only change to main.c cause no link step (early cutoff):
   $ sed -i 's/int main/int      main/g' example/main.c
   $ jenga build
   elaborated 3 rules and 3 targets
-  materalizing 1 artifact
   A: gcc -c main.c -o main.o
   ran 1 action
 
@@ -145,7 +144,6 @@ Update build rules to link executable under a different name:
   $ sed -i 's/main.exe/RENAMED.exe/' example/build.jenga
   $ jenga build
   elaborated 3 rules and 3 targets
-  materalizing 1 artifact
   A: gcc fib.o main.o -o RENAMED.exe
   ran 1 action
 
@@ -155,40 +153,45 @@ Update build rules to link executable under a different name:
   $ find ,jenga
   ,jenga
   ,jenga/example
+  ,jenga/example/fib.o
   ,jenga/example/RENAMED.exe
+  ,jenga/example/main.o
 
 Relocate the example to a new directory; no rebuilds:
 
   $ mv example RELOCATED
   $ jenga build
   elaborated 3 rules and 3 targets
-  materalizing 1 artifact
 
   $ find ,jenga
   ,jenga
   ,jenga/RELOCATED
+  ,jenga/RELOCATED/fib.o
   ,jenga/RELOCATED/RENAMED.exe
+  ,jenga/RELOCATED/main.o
 
 Duplicate the example directory; double elaborated rules; still no rebuilds:
 
   $ cp -rp RELOCATED ANOTHER
   $ jenga build
   elaborated 6 rules and 6 targets
-  materalizing 2 artifacts
 
   $ find ,jenga
   ,jenga
   ,jenga/ANOTHER
+  ,jenga/ANOTHER/fib.o
   ,jenga/ANOTHER/RENAMED.exe
+  ,jenga/ANOTHER/main.o
   ,jenga/RELOCATED
+  ,jenga/RELOCATED/fib.o
   ,jenga/RELOCATED/RENAMED.exe
+  ,jenga/RELOCATED/main.o
 
 Modify code in one of the example directories; minimal rebuild as required:
 
   $ sed -i 's/fib(10)/fib(20)/g' RELOCATED/main.c
   $ jenga build
   elaborated 6 rules and 6 targets
-  materalizing 2 artifacts
   A: gcc -c main.c -o main.o
   A: gcc fib.o main.o -o RENAMED.exe
   ran 2 actions
@@ -202,9 +205,8 @@ Run the two versions:
 
 Materalize all targets:
 
-  $ jenga build -m
+  $ jenga build
   elaborated 6 rules and 6 targets
-  materalizing all targets
 
   $ find ,jenga
   ,jenga
@@ -221,25 +223,29 @@ Materalize just artifacts:
 
   $ jenga build
   elaborated 6 rules and 6 targets
-  materalizing 2 artifacts
 
   $ find ,jenga
   ,jenga
   ,jenga/ANOTHER
+  ,jenga/ANOTHER/fib.o
   ,jenga/ANOTHER/RENAMED.exe
+  ,jenga/ANOTHER/main.o
   ,jenga/RELOCATED
+  ,jenga/RELOCATED/fib.o
   ,jenga/RELOCATED/RENAMED.exe
+  ,jenga/RELOCATED/main.o
 
 Remove one directory copy
 
   $ rm -rf RELOCATED
   $ jenga build
   elaborated 3 rules and 3 targets
-  materalizing 1 artifact
   $ find ,jenga
   ,jenga
   ,jenga/ANOTHER
+  ,jenga/ANOTHER/fib.o
   ,jenga/ANOTHER/RENAMED.exe
+  ,jenga/ANOTHER/main.o
 
 Mod some more, try -q
 

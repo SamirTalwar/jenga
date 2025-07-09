@@ -1,8 +1,6 @@
 module MakeStyle (elaborate) where
 
 import Data.List.Split (splitOn)
-import Data.Set ((\\))
-import Data.Set qualified as Set
 import ElabC qualified (macroC)
 import Interface (G(..),Rule(..),Action(..),D(..),Key(..))
 import Par4 (Position,Par,parse,position,skip,alts,many,some,sat,lit)
@@ -19,7 +17,6 @@ elaborate config  = do
     elabRuleFile config  = do
       s <- GReadKey config
       let clauses = Par4.parse gram s
-      sequence_ [ GArtifact (makeKey key) | key <- selectArtifacts clauses ]
       mapM_ elabClause clauses
 
     elabClause :: Clause -> G ()
@@ -58,15 +55,6 @@ elaborate config  = do
 
     makeKey :: String -> Key
     makeKey basename = Key (dirKey config </> basename)
-
-    selectArtifacts :: [Clause] -> [String]
-    selectArtifacts clauses = do
-      -- Only considering clauses which define rule-triples...
-      -- Any target which isn't a deps is considered an artifcat
-      let targets = [ key | ClauseTrip (Trip{targets}) <- clauses, key <- targets ]
-      let deps = [ keyOfDep dep
-                 | ClauseTrip (Trip{deps}) <- clauses, dep <- deps ] ++ [ allFilesName ]
-      Set.toList (Set.fromList targets \\ Set.fromList deps)
 
     -- hidden rule so user-rules can access the list of file names
     allFilesName = "all.files"
@@ -123,10 +111,6 @@ data Dep
   = DepPlain String     -- key
   | DepScanner String   -- @key
   | DepOpt String       -- ?key
-
-keyOfDep :: Dep -> String
-keyOfDep = \case DepPlain k -> k; DepScanner k -> k; DepOpt k -> k
-
 
 -- grammar for traditional "make-style" triples, spread over two lines.
 -- Extended to allow scanner deps of the form "@file"

@@ -73,7 +73,6 @@ jenga build
 Jenga will respond:
 ```
 elaborated 1 rule and 1 target
-materalizing 1 artifact
 A: gcc main.c -o hello.exe
 ran 1 action
 ```
@@ -96,7 +95,6 @@ Jenga will rerun the `gcc` action because the input file `main.c` has changed.
 ```
 $ jenga build && ,jenga/hello.exe
 elaborated 1 rule and 1 target
-materalizing 1 artifact
 A: gcc -o hello.exe main.c
 ran 1 action
 Hello, jenga universe!
@@ -111,7 +109,6 @@ This desirable behaviour is an effect of _full caching_.
 ```
 $ jenga build && ,jenga/hello.exe
 elaborated 1 rule and 1 target
-materalizing 1 artifact
 Hello, jenga world!
 ```
 

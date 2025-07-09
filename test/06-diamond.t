@@ -7,7 +7,6 @@
 
   $ jenga build
   elaborated 6 rules and 6 targets
-  materalizing 1 artifact
   A: echo -n A > a
   A: echo -n B  > b
   A: cat a b > ab
@@ -24,7 +23,6 @@ During any build (incuding a zero-rebuild) we should require 'b' more than once.
 
   $ jenga build -v
   elaborated 6 rules and 6 targets
-  materalizing 1 artifact
   B: Require: example/top
   B: Require: example/ab
   B: Require: example/a

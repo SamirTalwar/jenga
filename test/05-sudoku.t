@@ -7,7 +7,6 @@
 
   $ jenga build
   elaborated 7 rules and 8 targets
-  materalizing 1 artifact
   A: find $HOME/.stack | grep lib/.*/bin/ghc$ | rev | cut -d/ -f3 | rev | cut -d- -f2 | sort -n | tail -1 > latest-version
   A: cp latest-version version
   A: find $HOME/.stack | grep lib/.*/bin/ghc$ | grep $(cat version) > ghc-path

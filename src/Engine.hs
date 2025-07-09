@@ -48,15 +48,15 @@ engineMain userProg = do
   elaborateAndBuild myPid cacheDir config userProg
 
 elaborateAndBuild :: Pid -> Loc -> Config -> UserProg -> IO ()
-elaborateAndBuild myPid cacheDir config@Config{buildMode,args,materializeAll,logMode} userProg = do
+elaborateAndBuild myPid cacheDir config@Config{buildMode,args,logMode} userProg = do
   let see = case logMode of LogQuiet -> False; _ -> True
   case buildMode of
     ModeListTargets -> do
       i <- runB myPid cacheDir config $ do
         initDirs
         system <- runElaboration config (userProg args)
-        let System{how} = system
-        let allTargets = Map.keys how
+        let System{rules} = system
+        let allTargets = [ target | Rule{hidden,targets} <- rules, target <- targets, not hidden ]
         sequence_ [ BLog (show key) | key <- allTargets ]
       when (see && i>0) $ do
         printf "ran %s\n" (pluralize i "action")
@@ -81,8 +81,6 @@ elaborateAndBuild myPid cacheDir config@Config{buildMode,args,materializeAll,log
         initDirs
         system <- runElaboration config (userProg args)
         reportSystem config system
-        when see $ BLog $ printf "materalizing %s"
-          (if materializeAll then "all targets" else (pluralize (length (artifacts system)) "artifact"))
         buildWithSystem config system
       when (see && i>0) $ do
         printf "ran %s\n" (pluralize i "action")
@@ -94,12 +92,11 @@ elaborateAndBuild myPid cacheDir config@Config{buildMode,args,materializeAll,log
       callProcess (printf ",jenga/%s" target) argsForTarget
 
 buildWithSystem :: Config -> System -> B ()
-buildWithSystem config@Config{materializeAll,reverseDepsOrder} system = do
-  let System{artifacts,rules,how} = system
+buildWithSystem config@Config{reverseDepsOrder} system = do
+  let System{rules,how} = system
   let allTargets = [ target | Rule{hidden,targets} <- rules, target <- targets, not hidden ]
-  let whatToBuild = if materializeAll then allTargets else artifacts
   _ :: [()] <- parallel [ buildAndMaterialize config how key
-                        | key <- (if reverseDepsOrder then reverse whatToBuild else whatToBuild)
+                        | key <- (if reverseDepsOrder then reverse allTargets else allTargets)
                         ]
   pure ()
 
@@ -174,7 +171,7 @@ data ErrMessage = ErrMessage String
 
 instance Show ErrMessage where show (ErrMessage s) = printf "Error: %s" s
 
-data System = System { artifacts :: [Key], rules :: [Rule], how :: How }
+data System = System { rules :: [Rule], how :: How }
 
 type How = Map Key Rule
 
@@ -188,7 +185,7 @@ runElaboration config m =
 
   where
     system0 :: System
-    system0 = System { rules = [], artifacts = [], how = Map.empty }
+    system0 = System { rules = [], how = Map.empty }
 
     k0 :: System -> () -> B (OrErr System)
     k0 s () = pure (Right s)
@@ -219,9 +216,6 @@ runElaboration config m =
                 how <- pure $ List.foldl' (flip (flip Map.insert rule)) how targets
                 k system { rules = rule : rules, how } ()
 
-      GArtifact key -> do
-        let System{artifacts} = system
-        k system { artifacts = key : artifacts } ()
       GGlob dir -> do
         locs <- Execute (XGlob dir)
         k system locs

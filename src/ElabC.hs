@@ -10,7 +10,6 @@ macroC exe = do
   xs <- listBaseNamesWithSuffix (dirKey exe) ".c"
   mapM_ setupCruleWithDeps xs
   setupLinkRule exe xs
-  GArtifact exe
 
 setupLinkRule :: Key -> [Loc] -> G ()
 setupLinkRule exe xs =

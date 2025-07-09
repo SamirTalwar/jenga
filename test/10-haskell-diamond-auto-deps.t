@@ -7,7 +7,6 @@
 
   $ jenga build
   elaborated 10 rules and 15 targets
-  materalizing 6 artifacts
   A: find $HOME/.stack | grep -v lib | grep bin/ghc$ | sort -n | tail -1 > ghc-path
   A: echo exec $(cat ghc-path) '"$@"' > ghc.exe ; chmod +x ghc.exe
   A: echo 'import Top' > main.hs
@@ -25,19 +24,18 @@
 
   $ jenga build -v
   elaborated 10 rules and 15 targets
-  materalizing 6 artifacts
-  B: Require: example/main.hi
-  B: Require: example/depends
-  B: Require: example/ghc.exe
   B: Require: example/ghc-path
+  B: Require: example/ghc.exe
+  B: Require: example/depends
   B: Require: example/main.hs
   B: Require: example/Top.hi
   B: Require: example/C.hi
   B: Require: example/A.hi
   B: Require: example/B.hi
-  B: Require: example/diamond.exe
-  B: Require: example/main.o
   B: Require: example/Top.o
-  B: Require: example/B.o
   B: Require: example/C.o
+  B: Require: example/B.o
   B: Require: example/A.o
+  B: Require: example/main.hi
+  B: Require: example/main.o
+  B: Require: example/diamond.exe
