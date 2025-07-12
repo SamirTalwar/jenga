@@ -1,5 +1,6 @@
 module MakeStyle (elaborate) where
 
+import Data.List (intercalate)
 import Data.List.Split (splitOn)
 import ElabC qualified (macroC)
 import Interface (G(..),Rule(..),Action(..),D(..),Key(..))
@@ -154,18 +155,27 @@ gram = start
       let targets = target1 : moreTargets
       colon
       deps <- many dep
-      alts [colon,newlineAndIndent]
-      -- TODO: support comments in action body
-      command <- singleCommandLine
-      alts [nl,commentToEol]
+      command <- alts [tradRule,onelineRule]
       skip $ alts [nl,commentToEol]
       pure (ClauseTrip (Trip {pos,targets,deps,command}))
 
     -- traditional make syntax
-    newlineAndIndent = do
+    tradRule = do
       alts [nl,commentToEol]
+      (intercalate " ; " . filter (\case "" -> False; _ -> True)) <$> many indentedCommand
+
+    indentedCommand = do
       space -- at least one space char to begin the action
       skip space
+      command <- singleCommandLine
+      alts [nl,commentToEol]
+      pure command
+
+    onelineRule = do
+      colon
+      command <- singleCommandLine
+      alts [nl,commentToEol]
+      pure command
 
     -- syntax to allow a rule on a single line
     colon = do
@@ -187,7 +197,7 @@ gram = start
     specialChar = (`elem` " :#()\n")
 
     singleCommandLine = do
-      trimTrailingSpace <$> some actionChar
+      trimTrailingSpace <$> many actionChar
 
     actionChar = sat $ \case -- anything upto a comment or NL
       '#' -> False
