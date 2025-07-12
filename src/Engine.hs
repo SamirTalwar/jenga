@@ -19,7 +19,8 @@ import System.Exit(ExitCode(..))
 import System.FileLock (tryLockFile,SharedExclusive(Exclusive),unlockFile)
 import System.FilePath qualified as FP
 import System.Posix.Files (fileExist,createLink,removeLink,getFileStatus,fileMode,intersectFileModes,setFileMode,getFileStatus,isDirectory)
-import System.Process (shell,callProcess,readCreateProcess,readCreateProcessWithExitCode,Pid,getCurrentPid)
+import System.Posix.Process (forkProcess)
+import System.Process (shell,callProcess,readCreateProcess,readCreateProcessWithExitCode,getCurrentPid)
 import Text.Printf (printf)
 import Text.Read (readMaybe)
 
@@ -46,24 +47,24 @@ engineMain userProg = do
         when see $ printf "using temporary cache: %s\n" (show loc)
         pure loc
 
-  elaborateAndBuild myPid cacheDir config userProg
+  elaborateAndBuild cacheDir config userProg
 
-elaborateAndBuild :: Pid -> Loc -> Config -> UserProg -> IO ()
-elaborateAndBuild myPid cacheDir config@Config{buildMode,args,logMode} userProg = do
-  let see = case logMode of LogQuiet -> False; _ -> True
+
+elaborateAndBuild :: Loc -> Config -> UserProg -> IO ()
+elaborateAndBuild cacheDir config@Config{buildMode,args} userProg = do
+  --let see = case logMode of LogQuiet -> False; _ -> True
   case buildMode of
+
     ModeListTargets -> do
-      i <- runB myPid cacheDir config $ do
-        initDirs
+      runB cacheDir config $ do
         system <- runElaboration config (userProg args)
         let System{rules} = system
         let allTargets = [ target | Rule{hidden,targets} <- rules, target <- targets, not hidden ]
         sequence_ [ BLog (show key) | key <- allTargets ]
-      when (see && i>0) $ do
-        printf "ran %s\n" (pluralize i "action")
+
+
     ModeListRules -> do
-      i <- runB myPid cacheDir config $ do
-        initDirs
+      runB cacheDir config $ do
         system <- runElaboration config (userProg args)
         let System{how,rules} = system
         staticRules :: [StaticRule] <- concat <$>
@@ -75,29 +76,26 @@ elaborateAndBuild myPid cacheDir config@Config{buildMode,args,logMode} userProg 
                    , not ruleHidden
                    ]
         BLog (intercalate "\n\n" (map show staticRules))
-      when (see && i>0) $ do
-        printf "ran %s\n" (pluralize i "action")
+
     ModeBuild -> do
-      i <- runB myPid cacheDir config $ do
-        initDirs
+      runB cacheDir config $ do
         system <- runElaboration config (userProg args)
         reportSystem config system
         buildWithSystem config system
-      when (see && i>0) $ do
-        printf "ran %s\n" (pluralize i "action")
+
     ModeBuildAndRun target argsForTarget -> do
-      _i <- runB myPid cacheDir config $ do
-        initDirs
+      runB cacheDir config $ do
         system <- runElaboration config (userProg [FP.takeDirectory target])
         buildWithSystem config system
       callProcess (printf ",jenga/%s" target) argsForTarget
 
+
 buildWithSystem :: Config -> System -> B ()
-buildWithSystem config@Config{reverseDepsOrder} system = do
+buildWithSystem config system = do
   let System{rules,how} = system
   let allTargets = [ target | Rule{hidden,targets} <- rules, target <- targets, not hidden ]
   _ :: [()] <- parallel [ buildAndMaterialize config how key
-                        | key <- (if reverseDepsOrder then reverse allTargets else allTargets)
+                        | key <- allTargets
                         ]
   pure ()
 
@@ -158,16 +156,6 @@ tracesDir = do cacheDir <- BCacheDir; pure (cacheDir </> "traces")
 
 artifactsDir :: Loc
 artifactsDir = Loc ",jenga"
-
-initDirs :: B ()
-initDirs = do
-  tracesDir <- tracesDir
-  cachedFilesDir <- cachedFilesDir
-  Execute $ do
-    XRemoveDirRecursive artifactsDir
-    XMakeDir cachedFilesDir
-    XMakeDir tracesDir
-    XMakeDir artifactsDir
 
 ----------------------------------------------------------------------
 -- Elaborate
@@ -243,7 +231,7 @@ locateKey (Key (Loc fp)) = Loc (FP.takeFileName fp)
 -- Build
 
 doBuild :: Config -> How -> Key -> B Digest
-doBuild config@Config{logMode,reverseDepsOrder} how = do
+doBuild config@Config{logMode} how = do
   -- TODO: document this flow.
   -- TODO: check for cycles.
   memoDigestByKey $ \sought -> do
@@ -260,9 +248,7 @@ doBuild config@Config{logMode,reverseDepsOrder} how = do
       Just rule@Rule{depcom} -> do
         let seeV = case logMode of LogVerbose -> True; _ -> False
         when seeV $ BLog (printf "B: Require: %s" (show sought))
-        (deps0,action@Action{command}) <- gatherDeps config how depcom
-
-        let deps = if reverseDepsOrder then reverse deps0 else deps0
+        (deps,action@Action{command}) <- gatherDeps config how depcom
 
         wdeps <- (WitMap . Map.fromList) <$>
           parallel [ do digest <- doBuild config how dep; pure (locateKey dep,digest)
@@ -286,13 +272,13 @@ doBuild config@Config{logMode,reverseDepsOrder} how = do
                     wtargets <- runJobAndSaveWitness config action wks witKey wdeps rule
                     let digest = lookWitMap (locateKey sought) wtargets
                     Execute $ do
-                      XIO (unlockFile lock)
+                      -- unlink before unlock
                       XUnLink lockLoc
+                      XIO (unlockFile lock)
                     pure digest
                   Nothing -> do
-                    --BLog (printf "lockJob failed(%s): %s" (show wks) (show command))
                     BYield
-                    -- simply trying again means failed jobs arre re-attempted
+                    -- trying again means failed jobs are reattempted
                     -- which is not necessarily a good strategy
                     again
 
@@ -568,34 +554,50 @@ data B a where -- TODO: BFail?
   BPar :: B a -> B b -> B (a,b)
   BYield :: B ()
 
-runB :: Pid -> Loc -> Config -> B () -> IO Int
-runB myPid cacheDir config@Config{keepSandBoxes,logMode} b = runX config $ do
-  let see = case logMode of LogQuiet -> False; _ -> True
-  when (see && keepSandBoxes) $ XLog (printf "sandboxes created in: %s" (show sandboxParent))
-  loop b bstate0 k0
+runB :: Loc -> Config -> B () -> IO ()
+runB cacheDir config@Config{keepSandBoxes,logMode,jnum} build0 = do
+  parallelize jnum $ do
+    runX config $ do
+      loop build bstate0 k0
   where
+    build = do
+      let see = case logMode of LogQuiet -> False; _ -> True
+      Execute $ do
+        myPid <- XIO getCurrentPid
+        when (see && keepSandBoxes) $ do
+          XLog (printf "sandboxes created in: %s" (show (sandboxParent myPid)))
+      initDirs
+      build0
+
     -- TODO: We should cleanup our sandbox dir on abort.
     -- Currently it gets left if we C-c jenga
     -- Or if any build command fails; since that aborts jenga (TODO: fix that!)
     -- This means that even the cram tests leave .jbox droppings around.
     -- Not the end of the day, but we could be cleaner.
-    sandboxParent = Loc (printf "/tmp/.jbox/%s" (show myPid))
 
-    k0 :: BState -> () -> X Int
+    sandboxParent pid = Loc (printf "/tmp/.jbox/%s" (show pid))
+
+    k0 :: BState -> () -> X ()
     k0 BState{runCounter,active,blocked} () = do
-      when (not keepSandBoxes) $ XRemoveDirRecursive sandboxParent
+      myPid <- XIO getCurrentPid
+      when (not keepSandBoxes) $ XRemoveDirRecursive (sandboxParent myPid)
       when ((length active + length blocked) /= 0) $ error "runB: unexpected left over jobs"
-      pure runCounter
+      let see = case logMode of LogQuiet -> False; _ -> True
+      let i = runCounter
+      when (see && i>0) $ do
+        XLog (printf "ran %s" (pluralize i "action"))
+      pure ()
 
-    loop :: B a -> BState -> (BState -> a -> X Int) -> X Int
+    loop :: B a -> BState -> (BState -> a -> X ()) -> X ()
     loop m0 s k = case m0 of
       BRet a -> k s a
       BBind m f -> loop m s $ \s a -> loop (f a) s k
       BLog mes -> do XLog mes; k s ()
       BCacheDir -> k s cacheDir
       BNewSandbox -> do
+        myPid <- XIO getCurrentPid
         let BState{sandboxCounter=i} = s
-        k s { sandboxCounter = 1 + i } (sandboxParent </> show i)
+        k s { sandboxCounter = 1 + i } (sandboxParent myPid </> show i)
       BRunActionInDir sandbox action@Action{hidden} -> do
         bool <- XRunActionInDir sandbox action
         k s { runCounter = runCounter s + (if hidden then 0 else 1) } bool
@@ -631,7 +633,7 @@ runB myPid cacheDir config@Config{keepSandBoxes,logMode} b = runX config $ do
         let me = BJob (pure ()) k
         next s { blocked = me : blocked }
 
-    next :: BState -> X Int
+    next :: BState -> X ()
     next s@BState{active,blocked} = do
       case active of
         j:active -> do
@@ -641,8 +643,19 @@ runB myPid cacheDir config@Config{keepSandBoxes,logMode} b = runX config $ do
           blocked -> do
             next s { active = reverse blocked, blocked = [] }
 
-    resume :: BJob -> BState -> X Int
+    resume :: BJob -> BState -> X ()
     resume (BJob p k) s = loop p s k
+
+
+initDirs :: B ()
+initDirs = do
+  tracesDir <- tracesDir
+  cachedFilesDir <- cachedFilesDir
+  Execute $ do
+    XRemoveDirRecursive artifactsDir
+    XMakeDir cachedFilesDir
+    XMakeDir tracesDir
+    XMakeDir artifactsDir
 
 data BState = BState
   { sandboxCounter :: Int
@@ -662,7 +675,7 @@ bstate0 = BState
   }
 
 data BJob where
-  BJob :: B a -> (BState -> a -> X Int) -> BJob
+  BJob :: B a -> (BState -> a -> X ()) -> BJob
 
 ----------------------------------------------------------------------
 -- X: execution monad
@@ -793,5 +806,23 @@ safeRemoveLink fp = do
   try (removeLink fp) >>= \case
     Right () -> pure ()
     Left (_e::SomeException) -> do
-      printf "safeRemoveLink: caught %s\n" (show _e)
+      --printf "safeRemoveLink: caught %s\n" (show _e)
       pure ()
+
+parallelize :: Int -> IO () -> IO ()
+parallelize j x = -- TODO 3 or more, when 2 is working reliably
+  case j of
+    1 -> x
+    2 -> twoCopies x
+    _ -> error (show ("parallelize(j=%d)",j))
+
+twoCopies :: IO () -> IO ()
+twoCopies io = do
+  _pid1 <- getCurrentPid
+  _pid2 <- forkProcess $ do
+    _pid2 <- getCurrentPid
+    --printf "child: %s" (show [pid1,pid2])
+    io
+  --printf "parent: %s" (show [pid1,pid2])
+  -- TODO: wait?
+  io

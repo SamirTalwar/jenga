@@ -8,13 +8,13 @@ import Options.Applicative
 data LogMode = LogQuiet | LogActions | LogVerbose
 
 data Config = Config
-  { logMode :: LogMode
+  { jnum :: Int
   , seePid :: Bool
-  , seeX :: Bool
-  , seeI :: Bool
   , cacheDirSpec :: CacheDirSpec
   , keepSandBoxes :: Bool
-  , reverseDepsOrder :: Bool -- experiment for concurrent jengas
+  , logMode :: LogMode
+  , seeX :: Bool
+  , seeI :: Bool
   , buildMode :: BuildMode
   , args :: [FilePath]
   }
@@ -107,21 +107,13 @@ runCommand = sharedOptions LogQuiet
 sharedOptions :: LogMode -> Parser (BuildMode -> [FilePath] -> Config)
 sharedOptions defaultLogMode = Config
   <$>
-  (
-    flag' LogVerbose
-    (short 'v' <> help "Log build-targets checked")
-    <|>
-    flag' LogActions
-    (short 'a' <> help "Build showing actions run")
-    <|>
-    flag' LogQuiet
-    (short 'q' <> help "Build quietly, except for errors")
-    <|>
-    pure defaultLogMode
-  )
-  <*> switch (short 'p' <> help "Prefix log lines with pid")
-  <*> switch (short 'x' <> help "Log execution of externally run commands")
-  <*> switch (short 'i' <> help "Log execution of internal file system access")
+  option auto (short 'j'
+               <> value 1
+               <> metavar "NUM_PROCS"
+               <> help "Number of parallel jenga processes to run")
+  <*> switch (short 'p'
+              <> long "show-pid"
+              <> help "Prefix log lines with pid")
   <*>
   (
     CacheDirChosen <$> strOption
@@ -138,5 +130,23 @@ sharedOptions defaultLogMode = Config
   switch (short 'k' <> long "keep-sandboxes"
           <> help "Keep sandboxes when build completes")
   <*>
-  switch (long "reverse"
-          <> help "Reverse dependencies ordering; dev experiment!")
+  (
+    flag' LogActions
+    (short 'a'
+     <> long "show-actions"
+     <> help "Build showing actions run")
+    <|>
+    flag' LogQuiet
+    (short 'q'
+     <> long "quiet"
+     <> help "Build quietly, except for errors")
+    <|>
+    flag' LogVerbose
+    (short 'v'
+     <> long "verbose"
+     <> help "Build verbosely, showing build-targets checked")
+    <|>
+    pure defaultLogMode
+  )
+  <*> switch (short 'x' <> help "(DEV) Log execution of externally run commands")
+  <*> switch (short 'i' <> help "(DEV) Log execution of internal file system access")
