@@ -255,20 +255,20 @@ doBuild config@Config{logMode} how = do
                    ]
 
         let witKey = WitnessKey { command, wdeps }
-        let wks = hashWitnessKey witKey
+        let wkd = digestWitnessKey witKey
 
         let
           again = do
-            verifyWitness sought wks >>= \case
+            verifyWitness sought wkd >>= \case
               Just digest -> do
                 pure digest
 
               Nothing -> do
                 tracesDir <- tracesDir
-                let lockLoc@(Loc lockPath) = tracesDir </> (show wks ++ ".lock")
+                let lockLoc@(Loc lockPath) = tracesDir </> (show wkd ++ ".lock")
                 Execute (XIO (tryLockFile lockPath Exclusive)) >>= \case
                   Just lock -> do
-                    wtargets <- runJobAndSaveWitness config action wks witKey wdeps rule
+                    wtargets <- runJobAndSaveWitness config action wkd witKey wdeps rule
                     let digest = lookWitMap (locateKey sought) wtargets
                     Execute $ do
                       -- unlink before unlock
@@ -284,12 +284,12 @@ doBuild config@Config{logMode} how = do
         again
 
 
-runJobAndSaveWitness :: Config -> Action -> WitKeyHash -> WitnessKey -> WitMap -> Rule -> B WitMap
-runJobAndSaveWitness config action wks witKey wdeps rule = do
+runJobAndSaveWitness :: Config -> Action -> WitKeyDiget -> WitnessKey -> WitMap -> Rule -> B WitMap
+runJobAndSaveWitness config action wkd witKey wdeps rule = do
   wtargets <- buildWithRule config action wdeps rule
   let val = WitnessValue { wtargets }
   let wit = Witness { key = witKey, val }
-  saveWitness wks wit
+  saveWitness wkd wit
   pure wtargets
 
 
@@ -433,21 +433,21 @@ data WitnessKey = WitnessKey { command :: String, wdeps :: WitMap } deriving Sho
 -- TODO: perhaps filemode should be included in the target WitMap
 data WitMap = WitMap (Map Loc Digest) deriving Show
 
--- message digest of a witness trace; computer by internal MD5 code
-data WitKeyHash = WitKeyHash String -- TODO: renamed WitKeyDigest; name vars "wkd"
+-- message digest of a witness key; computer by internal MD5 code
+data WitKeyDiget = WitKeyDiget String
 
-instance Show WitKeyHash where show (WitKeyHash str) = str
+instance Show WitKeyDiget where show (WitKeyDiget str) = str
 
 lookWitMap :: Loc -> WitMap -> Digest
 lookWitMap loc (WitMap m) = maybe err id $ Map.lookup loc m
   where err = error "lookWitMap"
 
-hashWitnessKey :: WitnessKey -> WitKeyHash
-hashWitnessKey wk = WitKeyHash (MD5.md5s (MD5.Str (show wk)))
+digestWitnessKey :: WitnessKey -> WitKeyDiget
+digestWitnessKey wk = WitKeyDiget (MD5.md5s (MD5.Str (show wk)))
 
-verifyWitness :: Key -> WitKeyHash -> B (Maybe Digest)
-verifyWitness sought wks = do
-  lookupWitness wks >>= \case
+verifyWitness :: Key -> WitKeyDiget -> B (Maybe Digest)
+verifyWitness sought wkd = do
+  lookupWitness wkd >>= \case
     Nothing -> pure Nothing
     Just wit -> do
       let Witness{val} = wit
@@ -460,9 +460,9 @@ verifyWitness sought wks = do
         -- the user action will have to be rerun.
         pure $ Map.lookup (locateKey sought) m
 
-lookupWitness :: WitKeyHash -> B (Maybe Witness)
-lookupWitness wks = do
-  witFile <- witnessFile wks
+lookupWitness :: WitKeyDiget -> B (Maybe Witness)
+lookupWitness wkd = do
+  witFile <- witnessFile wkd
   Execute (XFileExists witFile) >>= \case
     False -> pure Nothing
     True -> Execute $ do
@@ -478,16 +478,16 @@ existsCacheFile digest = do
   file <- cacheFile digest
   Execute (XFileExists file)
 
-saveWitness :: WitKeyHash -> Witness -> B ()
-saveWitness wks wit = do
-  witFile <- witnessFile wks
+saveWitness :: WitKeyDiget -> Witness -> B ()
+saveWitness wkd wit = do
+  witFile <- witnessFile wkd
   Execute $ do
     XWriteFile (exportWitness wit ++ "\n") witFile
 
-witnessFile :: WitKeyHash -> B Loc
-witnessFile wks = do
+witnessFile :: WitKeyDiget -> B Loc
+witnessFile wkd = do
   tracesDir <- tracesDir
-  pure (tracesDir </> show wks)
+  pure (tracesDir </> show wkd)
 
 ----------------------------------------------------------------------
 -- export/import Witness data in fixed format using flatter type
