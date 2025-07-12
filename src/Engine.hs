@@ -399,20 +399,15 @@ linkIntoCache loc = do
   digest <- Execute (XDigest loc)
   file <- cacheFile digest
   Execute $ do
-    XFileExists file >>= \case -- small optimization
-      True -> pure ()
+    XFileExists file >>= \case
+      True -> XTransferFileMode loc file
       False -> do
-        -- even though the file didn't exist just above, it could appear by now
-        -- and so make this hard link fail.
         XHardLink loc file >>= \case
           True -> pure ()
           False -> do
-            -- Likely a concurrently runnning jenga has chosen to run the same rule as us,
-            -- at the same time, producing the same output.
-            -- When we implement job locking, this should't happen.
-            XLog (printf "linkIntoCache/HardLink: we lost the race: %s -> %s" (show loc) (show file))
-            -- TODO: propogate the executable status
-            pure ()
+            -- job locking ensures this can't happen
+            error (printf "linkIntoCache/HardLink: failure: %s -> %s"
+                   (show loc) (show file))
     XMakeReadOnly file
   pure digest
 
@@ -436,6 +431,7 @@ data WitnessValue = WitnessValue { wtargets :: WitMap }
 -- TODO: target set in witness key? i.e. forcing rerun when add or remove targets
 data WitnessKey = WitnessKey { command :: String, wdeps :: WitMap } deriving Show
 
+-- TODO: perhaps filemode should be included in the target WitMap
 data WitMap = WitMap (Map Loc Digest) deriving Show
 
 -- message digest of a witness trace; computer by internal MD5 code
@@ -698,6 +694,7 @@ data X a where
   XFileExists :: Loc -> X Bool
   XIsdirectory :: Loc -> X Bool
   XCopyFile :: Loc -> Loc -> X ()
+  XTransferFileMode :: Loc -> Loc -> X ()
   XMakeReadOnly :: Loc -> X ()
   XReadFile :: Loc -> X String
   XWriteFile :: String -> Loc -> X ()
@@ -772,11 +769,13 @@ runX Config{logMode,seePid,seeX,seeI} = loop
       XCopyFile (Loc src) (Loc dest) -> do
         logI $ printf "cp %s %s" src dest
         copyFile src dest
+      XTransferFileMode (Loc src) (Loc dest) -> do
+        mode <- fileMode <$> getFileStatus src
+        setFileMode dest mode
       XMakeReadOnly (Loc fp) -> do
         logI $ printf "chmod a-w %s" fp
-        old_mode <- fileMode <$> getFileStatus fp
-        let new_mode = intersectFileModes 0o555 old_mode
-        setFileMode fp new_mode
+        mode <- fileMode <$> getFileStatus fp
+        setFileMode fp (intersectFileModes 0o555 mode)
       XReadFile (Loc fp) -> do
         logI $ printf "cat %s" fp
         readFile fp
