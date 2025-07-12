@@ -28,6 +28,7 @@ data G a where
 
 data Rule = Rule
   { tag :: String
+  , dir :: Loc
   , hidden :: Bool
   , targets :: [Key]
   , depcom :: D Action

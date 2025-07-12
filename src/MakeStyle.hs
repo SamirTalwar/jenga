@@ -33,6 +33,7 @@ elaborate config  = do
     elabTrip Trip{pos,targets,deps,command} = do
       GRule $ Rule
         { tag = printf "rule@%s" (show pos)
+        , dir
         , hidden = False
         , targets = map makeKey targets
         , depcom = do sequence_ [ makeDep targets dep | dep <- deps ];  pure (bash command)
@@ -54,14 +55,16 @@ elaborate config  = do
         if b then DNeed key else pure ()
 
     makeKey :: String -> Key
-    makeKey basename = Key (dirKey config </> basename)
+    makeKey basename = Key (dir </> basename)
+
+    dir = dirKey config -- A rule is w.r.t a given directory
 
     -- hidden rule so user-rules can access the list of file names
     allFilesName = "all.files"
     allFilesRule =  do
-      let dir = dirKey config
       allFiles <- map Key <$> GGlob dir
       GRule (Rule { tag = printf "glob-%s" (show dir)
+                  , dir
                   , hidden = True
                   , targets = [ makeKey allFilesName ]
                   , depcom = pure (Action

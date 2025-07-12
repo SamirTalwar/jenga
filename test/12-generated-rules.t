@@ -77,25 +77,25 @@ Rules:
 
   $ jenga build -r
   example/main.o : example/main.c example/fib.h example/defs.h
-    gcc -c -o main.o main.c
+    cd example ; gcc -c -o main.o main.c
   
   example/fib.o : example/fib.c example/fib.h
-    gcc -c -o fib.o fib.c
+    cd example ; gcc -c -o fib.o fib.c
   
   example/c.rules : example/c.files
-    cat c.files | sed 's|\(.*\).c$|\1.o : @depends : gcc -c -o \1.o \1.c|' > c.rules
+    cd example ; cat c.files | sed 's|\(.*\).c$|\1.o : @depends : gcc -c -o \1.o \1.c|' > c.rules
   
   example/depends : example/c.files example/fib.c example/main.c example/h.files example/defs.h example/fib.h
-    gcc -MG -MM $(cat c.files) > depends
+    cd example ; gcc -MG -MM $(cat c.files) > depends
   
   example/h.files : example/all.files
-    cat all.files | grep '.h$' > h.files
+    cd example ; cat all.files | grep '.h$' > h.files
   
   example/o.files : example/c.files
-    cat c.files | sed 's|\(.*\).c|\1.o|' > o.files
+    cd example ; cat c.files | sed 's|\(.*\).c|\1.o|' > o.files
   
   example/c.files : example/all.files
-    cat all.files | grep '.c$' > c.files
+    cd example ; cat all.files | grep '.c$' > c.files
   
   example/hello.exe : example/o.files example/fib.o example/main.o
-    gcc -o hello.exe $(cat o.files)
+    cd example ; gcc -o hello.exe $(cat o.files)

@@ -17,6 +17,7 @@ setupLinkRule exe xs =
   let obs = [ mkKey x ".o" | x <- xs ]
   GRule $ Rule
     { tag = printf "link:%s" (show exe)
+    , dir = dirKey exe
     , hidden = False
     , targets = [exe]
     , depcom = do
@@ -49,6 +50,7 @@ parseDepsFile contents =
 ccCompileRule :: Key -> Key -> D () -> Rule
 ccCompileRule o c cDeps = Rule
   { tag = printf "cc:%s" (show o)
+  , dir = dirKey o
   , hidden = False
   , targets = [o]
   , depcom = do
@@ -72,6 +74,7 @@ readOpt key = do
 ccDepsRule :: Key -> Key  -> Rule
 ccDepsRule d c = Rule
   { tag = printf "cc:%s" (show d)
+  , dir = dirKey d
   , hidden = False
   , targets = [d]
   , depcom = do

@@ -69,10 +69,10 @@ elaborateAndBuild cacheDir config@Config{buildMode,args} userProg = do
         let System{how,rules} = system
         staticRules :: [StaticRule] <- concat <$>
           sequence [ do (deps,action@Action{hidden=actionHidden}) <- gatherDeps config how depcom
-                        pure [ StaticRule { tag, targets, deps, action }
+                        pure [ StaticRule { tag, dir, targets, deps, action }
                              | not actionHidden
                              ]
-                   | Rule{tag,hidden=ruleHidden,targets,depcom} <- rules
+                   | Rule{tag,dir,hidden=ruleHidden,targets,depcom} <- rules
                    , not ruleHidden
                    ]
         BLog (intercalate "\n\n" (map show staticRules))
@@ -101,17 +101,16 @@ buildWithSystem config system = do
 
 data StaticRule = StaticRule
   { tag :: String
+  , dir :: Loc
   , targets :: [Key]
   , deps :: [Key]
   , action :: Action
   }
 
--- TODO: this display of static rules does not take account of the fact that the
--- action is relative and designed to be run in a sandbox.
--- We can improve this simply by prefixing with "cd dir; "
 instance Show StaticRule where
-  show StaticRule{targets,deps,action=Action{command}} = do
-    printf "%s : %s\n  %s" (seeKeys targets) (seeKeys deps) command
+  show StaticRule{dir,targets,deps,action=Action{command}} = do
+    let cdPrefix = if dir == Loc "." then "" else printf "cd %s ; " (show dir)
+    printf "%s : %s\n  %s%s" (seeKeys targets) (seeKeys deps) cdPrefix command
 
 seeKeys :: [Key] -> String
 seeKeys = intercalate " " . map show
