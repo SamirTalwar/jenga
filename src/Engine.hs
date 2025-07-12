@@ -556,7 +556,7 @@ data B a where -- TODO: BFail?
 
 runB :: Loc -> Config -> B () -> IO ()
 runB cacheDir config@Config{keepSandBoxes,logMode,jnum} build0 = do
-  parallelize jnum $ do
+  nCopies jnum $ do
     runX config $ do
       loop build bstate0 k0
   where
@@ -806,23 +806,11 @@ safeRemoveLink fp = do
   try (removeLink fp) >>= \case
     Right () -> pure ()
     Left (_e::SomeException) -> do
-      --printf "safeRemoveLink: caught %s\n" (show _e)
+      printf "safeRemoveLink: caught %s\n" (show _e)
       pure ()
 
-parallelize :: Int -> IO () -> IO ()
-parallelize j x = -- TODO 3 or more, when 2 is working reliably
-  case j of
-    1 -> x
-    2 -> twoCopies x
-    _ -> error (show ("parallelize(j=%d)",j))
-
-twoCopies :: IO () -> IO ()
-twoCopies io = do
-  _pid1 <- getCurrentPid
-  _pid2 <- forkProcess $ do
-    _pid2 <- getCurrentPid
-    --printf "child: %s" (show [pid1,pid2])
+nCopies :: Int -> IO () -> IO ()
+nCopies n io =
+  if n < 1 then error "nCopies<1" else do
+    sequence_ $ replicate (n-1) $ do _ <- forkProcess io; pure ()
     io
-  --printf "parent: %s" (show [pid1,pid2])
-  -- TODO: wait?
-  io
