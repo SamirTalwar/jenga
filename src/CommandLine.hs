@@ -9,6 +9,7 @@ data LogMode = LogQuiet | LogActions | LogVerbose
 
 data Config = Config
   { logMode :: LogMode
+  , seePid :: Bool
   , seeX :: Bool
   , seeI :: Bool
   , cacheDirSpec :: CacheDirSpec
@@ -118,6 +119,7 @@ sharedOptions defaultLogMode = Config
     <|>
     pure defaultLogMode
   )
+  <*> switch (short 'p' <> help "Prefix log lines with pid")
   <*> switch (short 'x' <> help "Log execution of externally run commands")
   <*> switch (short 'i' <> help "Log execution of internal file system access")
   <*>

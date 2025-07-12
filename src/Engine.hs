@@ -16,8 +16,9 @@ import Interface (G(..),D(..),Rule(..),Action(..),Key(..),Loc(..))
 import StdBuildUtils ((</>),dirLoc)
 import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirectory,removePathForcibly,copyFile,getHomeDirectory)
 import System.Exit(ExitCode(..))
+import System.FileLock (tryLockFile,SharedExclusive(Exclusive),unlockFile)
 import System.FilePath qualified as FP
-import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode,getFileStatus,isDirectory)
+import System.Posix.Files (fileExist,createLink,removeLink,getFileStatus,fileMode,intersectFileModes,setFileMode,getFileStatus,isDirectory)
 import System.Process (shell,callProcess,readCreateProcess,readCreateProcessWithExitCode,Pid,getCurrentPid)
 import Text.Printf (printf)
 import Text.Read (readMaybe)
@@ -132,6 +133,7 @@ buildAndMaterialize :: Config -> How -> Key -> B ()
 buildAndMaterialize config how key = do
   digest <- doBuild config how key
   materialize digest key
+  pure ()
 
 materialize :: Digest -> Key -> B ()
 materialize digest key = do
@@ -245,7 +247,6 @@ doBuild config@Config{logMode,reverseDepsOrder} how = do
   -- TODO: document this flow.
   -- TODO: check for cycles.
   memoDigestByKey $ \sought -> do
-    --BYield -- explore! -- adding yield here changes the order of actions being run
     case Map.lookup sought how of
       Nothing -> do
         let Key loc = sought
@@ -270,17 +271,42 @@ doBuild config@Config{logMode,reverseDepsOrder} how = do
 
         let witKey = WitnessKey { command, wdeps }
         let wks = hashWitnessKey witKey
-        verifyWitness sought wks >>= \case
-          Just digest -> do
-            pure digest
 
-          Nothing -> do
-            wtargets <- buildWithRule config action wdeps rule
-            let val = WitnessValue { wtargets }
-            let wit = Witness { key = witKey, val }
-            saveWitness wks wit
-            let digest = lookWitMap (locateKey sought) wtargets
-            pure digest
+        let
+          again = do
+            verifyWitness sought wks >>= \case
+              Just digest -> do
+                pure digest
+
+              Nothing -> do
+                tracesDir <- tracesDir
+                let lockLoc@(Loc lockPath) = tracesDir </> (show wks ++ ".lock")
+                Execute (XIO (tryLockFile lockPath Exclusive)) >>= \case
+                  Just lock -> do
+                    wtargets <- runJobAndSaveWitness config action wks witKey wdeps rule
+                    let digest = lookWitMap (locateKey sought) wtargets
+                    Execute $ do
+                      XIO (unlockFile lock)
+                      XUnLink lockLoc
+                    pure digest
+                  Nothing -> do
+                    --BLog (printf "lockJob failed(%s): %s" (show wks) (show command))
+                    BYield
+                    -- simply trying again means failed jobs arre re-attempted
+                    -- which is not necessarily a good strategy
+                    again
+
+        again
+
+
+runJobAndSaveWitness :: Config -> Action -> WitKeyHash -> WitnessKey -> WitMap -> Rule -> B WitMap
+runJobAndSaveWitness config action wks witKey wdeps rule = do
+  wtargets <- buildWithRule config action wdeps rule
+  let val = WitnessValue { wtargets }
+  let wit = Witness { key = witKey, val }
+  saveWitness wks wit
+  pure wtargets
+
 
 
 memoDigestByKey :: (Key -> B Digest) -> Key -> B Digest
@@ -350,7 +376,7 @@ setupInputs sandbox (WitMap m1) = do
         Execute $ do
           XHardLink file (sandbox </> show loc) >>= \case
             True -> pure ()
-            False -> error "setupInput/HardLink: we lost the race" -- TODO
+            False -> error "setupInput/HardLink: we lost the race" -- nothing ought to be racing us!
 
     | (loc,digest) <- Map.toList m1
     ]
@@ -421,13 +447,13 @@ data Witness = Witness { key :: WitnessKey, val :: WitnessValue }
 
 data WitnessValue = WitnessValue { wtargets :: WitMap }
 
--- TODO: just command in WitnessKey? hidden dont matter
+-- TODO: target set in witness key? i.e. forcing rerun when add or remove targets
 data WitnessKey = WitnessKey { command :: String, wdeps :: WitMap } deriving Show
 
 data WitMap = WitMap (Map Loc Digest) deriving Show
 
 -- message digest of a witness trace; computer by internal MD5 code
-data WitKeyHash = WitKeyHash String
+data WitKeyHash = WitKeyHash String -- TODO: renamed WitKeyDigest; name vars "wkd"
 
 instance Show WitKeyHash where show (WitKeyHash str) = str
 
@@ -455,8 +481,7 @@ verifyWitness sought wks = do
 
 lookupWitness :: WitKeyHash -> B (Maybe Witness)
 lookupWitness wks = do
-  tracesDir <- tracesDir
-  let witFile = tracesDir </> show wks
+  witFile <- witnessFile wks
   Execute (XFileExists witFile) >>= \case
     False -> pure Nothing
     True -> Execute $ do
@@ -464,7 +489,7 @@ lookupWitness wks = do
       case importWitness contents of
         Just wit -> pure (Just wit)
         Nothing -> do
-          XLog (printf "importWitness failed: [%s]" contents)
+          --XLog (printf "importWitness failed: [%s]" contents)
           pure Nothing
 
 existsCacheFile :: Digest -> B Bool
@@ -474,10 +499,14 @@ existsCacheFile digest = do
 
 saveWitness :: WitKeyHash -> Witness -> B ()
 saveWitness wks wit = do
-  tracesDir <- tracesDir
-  let witFile = tracesDir </> show wks
+  witFile <- witnessFile wks
   Execute $ do
     XWriteFile (exportWitness wit ++ "\n") witFile
+
+witnessFile :: WitKeyHash -> B Loc
+witnessFile wks = do
+  tracesDir <- tracesDir
+  pure (tracesDir </> show wks)
 
 ----------------------------------------------------------------------
 -- export/import Witness data in fixed format using flatter type
@@ -540,15 +569,11 @@ data B a where -- TODO: BFail?
   BYield :: B ()
 
 runB :: Pid -> Loc -> Config -> B () -> IO Int
-runB myPid cacheDir config@Config{keepSandBoxes,logMode} b = runX log config $ do
+runB myPid cacheDir config@Config{keepSandBoxes,logMode} b = runX config $ do
   let see = case logMode of LogQuiet -> False; _ -> True
   when (see && keepSandBoxes) $ XLog (printf "sandboxes created in: %s" (show sandboxParent))
   loop b bstate0 k0
   where
-    log :: Logger
-    --log mes = printf "[%s] %s\n" (show myPid) mes -- TODO: see pids when -j>1
-    log mes = putStrLn mes
-
     -- TODO: We should cleanup our sandbox dir on abort.
     -- Currently it gets left if we C-c jenga
     -- Or if any build command fails; since that aborts jenga (TODO: fix that!)
@@ -664,13 +689,19 @@ data X a where
   XReadFile :: Loc -> X String
   XWriteFile :: String -> Loc -> X ()
   XHardLink :: Loc -> Loc -> X Bool -- False means it already exists
+  XUnLink :: Loc -> X ()
   XRemoveDirRecursive :: Loc -> X ()
 
-type Logger = String -> IO ()
-
-runX :: Logger -> Config -> X a -> IO a
-runX log Config{logMode,seeX,seeI} = loop
+runX :: Config -> X a -> IO a
+runX Config{logMode,seePid,seeX,seeI} = loop
   where
+    log mes = do
+      case seePid of
+        False -> putStrLn mes
+        True -> do
+          myPid <- getCurrentPid
+          printf "[%s] %s\n" (show myPid) mes
+
     seeA = case logMode of LogQuiet -> False; _ -> True
     logA,logX,logI :: String -> IO ()
     logA mes = when seeA $ log (printf "A: %s" mes)
@@ -742,6 +773,9 @@ runX log Config{logMode,seeX,seeI} = loop
       XHardLink (Loc src) (Loc dest) -> do
         logI $ printf "ln %s %s" src dest
         myCreateLink src dest
+      XUnLink (Loc fp) -> do
+        logI $ printf "rm -f %s" fp
+        safeRemoveLink fp
       XRemoveDirRecursive (Loc fp) -> do
         logI $ printf "rm -rf %s" fp
         removePathForcibly fp
@@ -753,3 +787,11 @@ myCreateLink a b = do
     Right () -> pure True
     Left (_e::SomeException) -> do
       pure False
+
+safeRemoveLink :: FilePath -> IO ()
+safeRemoveLink fp = do
+  try (removeLink fp) >>= \case
+    Right () -> pure ()
+    Left (_e::SomeException) -> do
+      printf "safeRemoveLink: caught %s\n" (show _e)
+      pure ()

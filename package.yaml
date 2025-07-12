@@ -12,6 +12,7 @@ dependencies:
 - data-ordlist
 - directory
 - filepath
+- filelock
 - MissingH
 - optparse-applicative
 - process
