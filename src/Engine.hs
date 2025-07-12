@@ -5,9 +5,8 @@ import CommandLine qualified (exec)
 import Control.Exception (try,SomeException)
 import Control.Monad (ap,liftM)
 import Control.Monad (when)
-import Data.HMap (HMap)
-import Data.HMap qualified as HMap (empty,createKey,lookup,insert)
 import Data.Hash.MD5 qualified as MD5
+import Data.IORef (newIORef,readIORef,writeIORef)
 import Data.List (intercalate)
 import Data.List qualified as List (foldl')
 import Data.List.Split (splitOn)
@@ -21,6 +20,7 @@ import System.FilePath qualified as FP
 import System.Posix.Files (fileExist,createLink,getFileStatus,fileMode,intersectFileModes,setFileMode,getFileStatus,isDirectory)
 import System.Process (shell,callProcess,readCreateProcess,readCreateProcessWithExitCode,Pid,getCurrentPid)
 import Text.Printf (printf)
+import Text.Read (readMaybe)
 
 ----------------------------------------------------------------------
 -- Engine main
@@ -141,7 +141,11 @@ materialize digest key = do
     XMakeDir (dirLoc materializedFile)
     XHardLink cacheFile materializedFile >>= \case
       True -> pure ()
-      False -> error "Materialize/HardLink: we lost the race" -- TODO nothing?
+      False -> do
+        -- Likely from concurrently runnning jenga
+        -- If we do materialization when (just after) the action is run, this wont happen.
+        -- XLog (printf "Materialize/HardLink: we lost the race: %s -> %s" (show cacheFile) (show materializedFile))
+        pure ()
 
 ----------------------------------------------------------------------
 -- locations for cache, sandbox etc
@@ -241,6 +245,7 @@ doBuild config@Config{logMode,reverseDepsOrder} how = do
   -- TODO: document this flow.
   -- TODO: check for cycles.
   memoDigestByKey $ \sought -> do
+    --BYield -- explore! -- adding yield here changes the order of actions being run
     case Map.lookup sought how of
       Nothing -> do
         let Key loc = sought
@@ -456,7 +461,11 @@ lookupWitness wks = do
     False -> pure Nothing
     True -> Execute $ do
       contents <- XReadFile witFile
-      pure $ Just (exportWitness contents)
+      case importWitness contents of
+        Just wit -> pure (Just wit)
+        Nothing -> do
+          XLog (printf "importWitness failed: [%s]" contents)
+          pure Nothing
 
 existsCacheFile :: Digest -> B Bool
 existsCacheFile digest = do
@@ -468,16 +477,16 @@ saveWitness wks wit = do
   tracesDir <- tracesDir
   let witFile = tracesDir </> show wks
   Execute $ do
-    XWriteFile (importWitness wit ++ "\n") witFile
+    XWriteFile (exportWitness wit ++ "\n") witFile
 
 ----------------------------------------------------------------------
 -- export/import Witness data in fixed format using flatter type
 
-exportWitness :: String -> Witness
-exportWitness = fromQ . read
+importWitness :: String -> Maybe Witness
+importWitness s = fromQ <$> readMaybe s
 
-importWitness :: Witness -> String
-importWitness = show . toQ
+exportWitness :: Witness -> String
+exportWitness = show . toQ
 
 data QWitness = WIT
   { command :: String
@@ -531,11 +540,15 @@ data B a where -- TODO: BFail?
   BYield :: B ()
 
 runB :: Pid -> Loc -> Config -> B () -> IO Int
-runB myPid cacheDir config@Config{keepSandBoxes,logMode} b = runX config $ do
+runB myPid cacheDir config@Config{keepSandBoxes,logMode} b = runX log config $ do
   let see = case logMode of LogQuiet -> False; _ -> True
   when (see && keepSandBoxes) $ XLog (printf "sandboxes created in: %s" (show sandboxParent))
-  loop b state0 k0
+  loop b bstate0 k0
   where
+    log :: Logger
+    --log mes = printf "[%s] %s\n" (show myPid) mes -- TODO: see pids when -j>1
+    log mes = putStrLn mes
+
     -- TODO: We should cleanup our sandbox dir on abort.
     -- Currently it gets left if we C-c jenga
     -- Or if any build command fails; since that aborts jenga (TODO: fix that!)
@@ -543,18 +556,10 @@ runB myPid cacheDir config@Config{keepSandBoxes,logMode} b = runX config $ do
     -- Not the end of the day, but we could be cleaner.
     sandboxParent = Loc (printf "/tmp/.jbox/%s" (show myPid))
 
-    state0 = BState
-      { sandboxCounter = 0
-      , runCounter = 0
-      , memo = Map.empty
-      , active = []
-      , blocked = []
-      , hmap = HMap.empty
-      }
-
     k0 :: BState -> () -> X Int
-    k0 BState{runCounter} () = do
+    k0 BState{runCounter,active,blocked} () = do
       when (not keepSandBoxes) $ XRemoveDirRecursive sandboxParent
+      when ((length active + length blocked) /= 0) $ error "runB: unexpected left over jobs"
       pure runCounter
 
     loop :: B a -> BState -> (BState -> a -> X Int) -> X Int
@@ -580,20 +585,19 @@ runB myPid cacheDir config@Config{keepSandBoxes,logMode} b = runX config $ do
         k s { memo = Map.insert key digest memo } ()
 
       BPar a b -> do
-        keyA <- XIO HMap.createKey
-        keyB <- XIO HMap.createKey
+        -- continutation k is called only when both sides have completed
+        varA <- XIO (newIORef Nothing)
+        varB <- XIO (newIORef Nothing)
         let
           kA s a = do
-            let BState{hmap} = s
-            case HMap.lookup keyB hmap of
-              Just b -> k s (a,b)
-              Nothing -> next s { hmap = HMap.insert keyA a hmap }
+            XIO (readIORef varB) >>= \case
+              Nothing -> do XIO (writeIORef varA (Just a)); next s
+              Just b -> do k s (a,b)
         let
           kB s b = do
-            let BState{hmap} = s
-            case HMap.lookup keyA hmap of
-              Just a -> k s (a,b)
-              Nothing -> next s { hmap = HMap.insert keyB b hmap }
+            XIO (readIORef varA) >>= \case
+              Nothing -> do XIO (writeIORef varB (Just b)); next s
+              Just a -> do k s (a,b)
 
         loop a s { active = BJob b kB : active s } kA
 
@@ -605,7 +609,8 @@ runB myPid cacheDir config@Config{keepSandBoxes,logMode} b = runX config $ do
     next :: BState -> X Int
     next s@BState{active,blocked} = do
       case active of
-        j:active -> resume j s { active }
+        j:active -> do
+          resume j s { active }
         [] -> case blocked of
           [] -> error "next: no more jobs"
           blocked -> do
@@ -614,18 +619,21 @@ runB myPid cacheDir config@Config{keepSandBoxes,logMode} b = runX config $ do
     resume :: BJob -> BState -> X Int
     resume (BJob p k) s = loop p s k
 
-{-exploreYield :: B a -> B a
-exploreYield build = do
-  --BYield -- TODO: not working right yet! -- runs 185 action instead of 47. lost memoization?
-  build-}
-
 data BState = BState
   { sandboxCounter :: Int
   , runCounter :: Int -- less that sandboxCounter because of hidden actions
   , memo :: Map Key Digest
   , active :: [BJob]
   , blocked :: [BJob]
-  , hmap :: HMap
+  }
+
+bstate0 :: BState
+bstate0 = BState
+  { sandboxCounter = 0
+  , runCounter = 0
+  , memo = Map.empty
+  , active = []
+  , blocked = []
   }
 
 data BJob where
@@ -658,21 +666,23 @@ data X a where
   XHardLink :: Loc -> Loc -> X Bool -- False means it already exists
   XRemoveDirRecursive :: Loc -> X ()
 
-runX :: Config -> X a -> IO a
-runX Config{logMode,seeX,seeI} = loop
+type Logger = String -> IO ()
+
+runX :: Logger -> Config -> X a -> IO a
+runX log Config{logMode,seeX,seeI} = loop
   where
     seeA = case logMode of LogQuiet -> False; _ -> True
     logA,logX,logI :: String -> IO ()
-    logA mes = when seeA $ printf "A: %s\n" mes
-    logX mes = when seeX $ printf "X: %s\n" mes
-    logI mes = when seeI $ printf "I: %s\n" mes
+    logA mes = when seeA $ log (printf "A: %s" mes)
+    logX mes = when seeX $ log (printf "X: %s" mes)
+    logI mes = when seeI $ log (printf "I: %s" mes)
 
     loop :: X a -> IO a
     loop x = case x of
       XRet a -> pure a
       XBind m f -> do a <- loop m; loop (f a)
       XIO io -> io
-      XLog s -> do putStrLn s
+      XLog mes -> log mes
 
       -- sandboxed execution of user's action; for now always a bash command
       XRunActionInDir (Loc dir) Action{hidden,command} -> do
