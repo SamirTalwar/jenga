@@ -1,7 +1,7 @@
 
 Get me a jenga executable and make a script to run it with a local cache
 
-  $ ln $(find $TESTDIR/../.stack-work/dist -type f -name main.exe) jenga.exe
+  $ (cd $TESTDIR/..; jenga build -q) && ln $TESTDIR/../,jenga/src/jenga jenga.exe
   $ echo 'exec ./jenga.exe "$@" --cache=.' > jenga
   $ chmod +x jenga
   $ export PATH=.:$PATH
