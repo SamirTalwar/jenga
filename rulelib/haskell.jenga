@@ -1,0 +1,48 @@
+
+## Build rules for haskell to be included within a build.jenga file
+## caller must define:
+##   executable-name ghc-version ghc-options default-extensions pkgdb packages main-entry
+## executable-name must be pre-defined (before the include)
+
+hs.files : all.files
+  grep '.hs$' all.files > hs.files
+  echo main.hs >> hs.files
+
+main.hs : main-entry
+  echo import $(cat main-entry) > main.hs
+
+module.names : hs.files
+  cat hs.files | sed 's|\(.*\).hs$|\1|' > module.names
+
+hs.rules : module.names
+  cat module.names | sed 's|.*|\0.o \0.hi: ghc.compiler @depends : ./ghc.compiler -c \0.hs|' > hs.rules
+
+include hs.rules
+
+link.rule : executable-name
+  echo $(cat executable-name) : ghc.linker @o.files main.o : ./ghc.linker *.o -o $(cat executable-name) > link.rule
+
+include link.rule
+
+o.files : module.names : cat module.names | sed 's|$|.o|' > o.files
+
+depends : ghc.compiler @hs.files : ./ghc.compiler -M *.hs -dep-makefile depends
+
+ghc.exe: ghc-version
+  echo /home/nic/.ghcup/bin/ghc-$(cat ghc-version) > ghc.exe
+
+ghc.compiler : ghc.exe pkgdb all.options
+  echo exec $(cat ghc.exe) -package-db $(cat pkgdb) $(cat all.options) '"$@"' > ghc.compiler
+  chmod +x ghc.compiler
+
+all.options : ghc-options default-extensions
+  (cat ghc-options ; cat default-extensions | sed 's|^|-X|') | sort > all.options
+
+ghc.linker : ghc.exe pkgdb packs
+  echo exec $(cat ghc.exe) -package-db $(cat pkgdb) $(cat packs) '"$@"' > ghc.linker
+  chmod +x ghc.linker
+
+## TODO: automate the discovery of the package-id hashes
+
+packs: packages
+  cat packages | sed 's|^|-package-id |' | sort | uniq > packs
