@@ -4,6 +4,7 @@ module Par4 (Par,parse,word,key,int,ws0,ws1,sp,nl,lit,sat,char,alts,opt,skip,sep
 import Control.Applicative (Alternative,empty,(<|>),many,some)
 import Control.Monad (ap,liftM)
 import qualified Data.Char as Char
+import Text.Printf (printf)
 
 instance Functor Par where fmap = liftM
 instance Applicative Par where pure = Ret; (<*>) = ap
@@ -74,14 +75,14 @@ data K4 a b = K4
   , err :: Int -> [Char] -> Res b       -- failure; input consumed (so an error!)
   }
 
-parse :: Par a -> String -> a
-parse parStart chars0  = do
+parse :: FilePath -> Par a -> String -> a
+parse filename parStart chars0  = do
 
   case (run 0 chars0 parStart kFinal) of
-    Left i -> error $ "failed to parse: " ++ report i
+    Left i -> error $ printf "%s: failed to parse: %s" filename (report i)
     Right (a,i) -> do
       if i == length chars0 then a else
-        error $ "unparsed input from: " ++ report i
+        error $ printf "%s: unparsed input from: %s" filename (report i)
 
   where
     report :: Int -> String
