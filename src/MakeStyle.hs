@@ -97,7 +97,7 @@ filterDepsFor targets contents = do
 
 dispatch :: String -> Key -> G()
 dispatch = \case
-  "CC" -> ElabC.macroC
+  "CC.kill" -> ElabC.macroC -- TODO: kill
   name -> error (printf "unknown macro name: %s" name)
 
 -- TODO: remove support for macros

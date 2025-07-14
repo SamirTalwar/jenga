@@ -1,1 +1,1 @@
-CC( main.exe )
+include cc.jenga
