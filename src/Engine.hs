@@ -69,10 +69,10 @@ elaborateAndBuild cacheDir config@Config{buildMode,args} userProg = do
         let System{how,rules} = system
         staticRules :: [StaticRule] <- concat <$>
           sequence [ do (deps,action@Action{hidden=actionHidden}) <- gatherDeps config how depcom
-                        pure [ StaticRule { tag, dir, targets, deps, action }
+                        pure [ StaticRule { rulename, dir, targets, deps, action }
                              | not actionHidden
                              ]
-                   | Rule{tag,dir,hidden=ruleHidden,targets,depcom} <- rules
+                   | Rule{rulename,dir,hidden=ruleHidden,targets,depcom} <- rules
                    , not ruleHidden
                    ]
         BLog (intercalate "\n\n" (map show staticRules))
@@ -100,7 +100,7 @@ buildWithSystem config system = do
   pure ()
 
 data StaticRule = StaticRule
-  { tag :: String
+  { rulename :: String
   , dir :: Loc
   , targets :: [Key]
   , deps :: [Key]
@@ -341,14 +341,14 @@ existsKey how key =
 buildWithRule :: Config -> Action -> WitMap -> Rule -> B WitMap
 buildWithRule Config{keepSandBoxes} action depWit rule = do
   sandbox <- BNewSandbox
-  let Rule{tag,targets} = rule
+  let Rule{rulename} = rule
   Execute (XMakeDir sandbox)
   setupInputs sandbox depWit
   BRunActionInDir sandbox action >>= \case
     False ->
-      error (printf "user action failed for rule: '%s'" tag)
+      error (printf "action failed for rule '%s'" rulename)
     True -> do
-      targetWit <- cacheOutputs sandbox targets
+      targetWit <- cacheOutputs sandbox rule
       when (not keepSandBoxes) $ Execute (XRemoveDirRecursive sandbox)
       pure targetWit
 
@@ -366,15 +366,15 @@ setupInputs sandbox (WitMap m1) = do
     | (loc,digest) <- Map.toList m1
     ]
 
-cacheOutputs :: Loc -> [Key] -> B WitMap
-cacheOutputs sandbox targets = do
+cacheOutputs :: Loc -> Rule -> B WitMap
+cacheOutputs sandbox Rule{rulename,targets} = do
   WitMap . Map.fromList <$> sequence
     [ do
         let tag = locateKey target
         let sandboxLoc = sandbox </> show tag
         Execute (XFileExists sandboxLoc) >>= \case
           False -> do
-            error (printf "rule failed to produced declared target '%s'" (show target))
+            error (printf "rule '%s' failed to produced declared target '%s'" rulename (show target))
           True -> do
             digest <- linkIntoCache sandboxLoc
             pure (tag,digest)

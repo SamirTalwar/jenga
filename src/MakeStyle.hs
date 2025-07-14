@@ -4,15 +4,16 @@ import Data.List (intercalate)
 import Data.List.Split (splitOn)
 import ElabC qualified (macroC)
 import Interface (G(..),Rule(..),Action(..),D(..),Key(..))
-import Par4 (Position,Par,parse,position,skip,alts,many,some,sat,lit)
+import Par4 (Position(..),Par,parse,position,skip,alts,many,some,sat,lit)
 import StdBuildUtils ((</>),dirKey,baseKey)
 import Text.Printf (printf)
 
 elaborate :: Key -> G ()
-elaborate config  = do
+elaborate config0  = do
   allFilesRule
-  elabRuleFile config
+  elabRuleFile config0
   where
+    dir = dirKey config0 -- A rule is w.r.t the directory of the build.jenga config file
 
     elabRuleFile :: Key -> G ()
     elabRuleFile config  = do
@@ -20,25 +21,27 @@ elaborate config  = do
       let clauses = Par4.parse (show config) gram s
       mapM_ elabClause clauses
 
-    elabClause :: Clause -> G ()
-    elabClause = \case
-      ClauseTrip x -> elabTrip x
-      ClauseMacro m -> elabMacro m
-      ClauseInclude filename -> elabRuleFile (makeKey filename)
+      where
+        elabClause :: Clause -> G ()
+        elabClause = \case
+            ClauseTrip x -> elabTrip x
+            ClauseMacro m -> elabMacro m
+            ClauseInclude filename -> elabRuleFile (makeKey filename)
 
-    elabMacro :: Macro -> G ()
-    elabMacro = \case
-      Macro{name,arg} -> dispatch name (makeKey arg)
+        elabMacro :: Macro -> G ()
+        elabMacro = \case
+          Macro{name,arg} -> dispatch name (makeKey arg)
 
-    elabTrip :: Trip -> G ()
-    elabTrip Trip{pos,targets,deps,command} = do
-      GRule $ Rule
-        { tag = printf "rule@%s" (show pos)
-        , dir
-        , hidden = False
-        , targets = map makeKey targets
-        , depcom = do sequence_ [ makeDep targets dep | dep <- deps ];  pure (bash command)
-        }
+        elabTrip :: Trip -> G ()
+        elabTrip Trip{pos=Position{line},targets,deps,command} = do
+          let rulename = printf "%s:%d" (show config) line
+          GRule $ Rule
+            { rulename
+            , dir
+            , hidden = False
+            , targets = map makeKey targets
+            , depcom = do sequence_ [ makeDep targets dep | dep <- deps ];  pure (bash command)
+            }
 
     bash :: String -> Action
     bash command = Action { hidden = False, command }
@@ -58,13 +61,11 @@ elaborate config  = do
     makeKey :: String -> Key
     makeKey basename = Key (dir </> basename)
 
-    dir = dirKey config -- A rule is w.r.t a given directory
-
     -- hidden rule so user-rules can access the list of file names
     allFilesName = "all.files"
     allFilesRule =  do
       allFiles <- map Key <$> GGlob dir
-      GRule (Rule { tag = printf "glob-%s" (show dir)
+      GRule (Rule { rulename = printf "glob-%s" (show dir)
                   , dir
                   , hidden = True
                   , targets = [ makeKey allFilesName ]

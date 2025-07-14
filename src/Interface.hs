@@ -27,7 +27,7 @@ data G a where
   GReadKey :: Key -> G String
 
 data Rule = Rule
-  { tag :: String
+  { rulename :: String
   , dir :: Loc
   , hidden :: Bool
   , targets :: [Key]

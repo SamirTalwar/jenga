@@ -16,7 +16,7 @@ setupLinkRule exe xs =
   if length xs == 0 then GFail (printf "setupLinkRule(%s):no objects" (show exe)) else do
   let obs = [ mkKey x ".o" | x <- xs ]
   GRule $ Rule
-    { tag = printf "link:%s" (show exe)
+    { rulename = printf "link:%s" (show exe)
     , dir = dirKey exe
     , hidden = False
     , targets = [exe]
@@ -49,7 +49,7 @@ parseDepsFile contents =
 
 ccCompileRule :: Key -> Key -> D () -> Rule
 ccCompileRule o c cDeps = Rule
-  { tag = printf "cc:%s" (show o)
+  { rulename = printf "cc:%s" (show o)
   , dir = dirKey o
   , hidden = False
   , targets = [o]
@@ -73,7 +73,7 @@ readOpt key = do
 
 ccDepsRule :: Key -> Key  -> Rule
 ccDepsRule d c = Rule
-  { tag = printf "cc:%s" (show d)
+  { rulename = printf "cc:%s" (show d)
   , dir = dirKey d
   , hidden = False
   , targets = [d]

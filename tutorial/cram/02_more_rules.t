@@ -100,7 +100,7 @@ Define and use header file. Build fails because we failed to declare dependecy o
       1 | #include "fib.h"
         |          ^~~~~~~
   compilation terminated.
-  jenga.exe: user action failed for rule: 'rule@8'0'
+  jenga.exe: action failed for rule 'build.jenga:8'
   CallStack (from HasCallStack):
 
 Add missing dep to both compile rules
