@@ -39,7 +39,7 @@ all.options : ghc-options default-extensions
   (cat ghc-options ; cat default-extensions | sed 's|^|-X|') | sort > all.options
 
 ghc.linker : ghc.exe pkgdb packs
-  echo exec $(cat ghc.exe) -package-db $(cat pkgdb) $(cat packs) '"$@"' > ghc.linker
+  echo exec $(cat ghc.exe) -package-db $(cat pkgdb) $(cat packs) '"$@"'  -package containers > ghc.linker
   chmod +x ghc.linker
 
 ## TODO: automate the discovery of the package-id hashes
