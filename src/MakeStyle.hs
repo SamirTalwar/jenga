@@ -2,9 +2,8 @@ module MakeStyle (elaborate) where
 
 import Data.List (intercalate)
 import Data.List.Split (splitOn)
-import ElabC qualified (macroC)
 import Interface (G(..),Rule(..),Action(..),D(..),Key(..))
-import Par4 (Position(..),Par,parse,position,skip,alts,many,some,sat,lit)
+import Par4 (Position(..),Par,parse,position,skip,alts,many,some,sat,lit,key)
 import StdBuildUtils ((</>),dirKey,baseKey)
 import Text.Printf (printf)
 
@@ -24,13 +23,8 @@ elaborate config0  = do
       where
         elabClause :: Clause -> G ()
         elabClause = \case
-            ClauseTrip x -> elabTrip x
-            ClauseMacro m -> elabMacro m
-            ClauseInclude filename -> elabRuleFile (makeKey filename)
-
-        elabMacro :: Macro -> G ()
-        elabMacro = \case
-          Macro{name,arg} -> dispatch name (makeKey arg)
+          ClauseTrip x -> elabTrip x
+          ClauseInclude filename -> elabRuleFile (makeKey filename)
 
         elabTrip :: Trip -> G ()
         elabTrip Trip{pos=Position{line},targets,deps,command} = do
@@ -95,15 +89,7 @@ filterDepsFor targets contents = do
   [ dep | line <- lines contents, dep <- parseDepsLine line ]
 
 
-dispatch :: String -> Key -> G()
-dispatch = \case
-  "CC.kill" -> ElabC.macroC -- TODO: kill
-  name -> error (printf "unknown macro name: %s" name)
-
--- TODO: remove support for macros
-data Clause = ClauseTrip Trip | ClauseMacro Macro | ClauseInclude String
-
-data Macro = Macro { name :: String, arg :: String } -- TODO: multi arg macro
+data Clause = ClauseTrip Trip | ClauseInclude String
 
 data Trip = Trip
   { pos :: Position
@@ -119,7 +105,6 @@ data Dep
 
 -- grammar for traditional "make-style" triples, spread over two lines.
 -- Extended to allow scanner deps of the form "@file"
--- And also simple macro calls: "Name(Arg)"
 
 gram :: Par [Clause]
 gram = start
@@ -129,31 +114,21 @@ gram = start
       many clause
 
     clause = do
-      pos <- position
-      x <- identifier
-      if x == "include" then includeClause else
-        alts [triple pos x, macroCall pos x]
+      alts [includeClause,ruleClause]
 
     includeClause = do
+      key "include"
+      space
+      skip space
       fileName <- identifier
       skip space
       alts [nl,commentToEol]
       skip $ alts [nl,commentToEol]
       pure (ClauseInclude fileName)
 
-    macroCall _pos name = do
-      lit '('
-      skip space
-      arg <- identifier
-      lit ')'
-      skip space
-      alts [nl,commentToEol]
-      skip $ alts [nl,commentToEol]
-      pure (ClauseMacro (Macro {name,arg}))
-
-    triple pos target1 = do
-      moreTargets <- many identifier
-      let targets = target1 : moreTargets
+    ruleClause = do
+      pos <- position
+      targets <- some identifier
       colon
       deps <- many dep
       command <- alts [tradRule,onelineRule]
