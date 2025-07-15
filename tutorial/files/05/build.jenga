@@ -1,0 +1,12 @@
+
+hello.exe : main.o fib.o
+  gcc -o hello.exe main.o fib.o
+
+main.o : @depends
+  gcc -Wall -c -o main.o main.c
+
+fib.o : @depends
+  gcc -Wall -c -o fib.o fib.c
+
+depends : main.c fib.c
+  gcc -MG -MM *.c > depends
