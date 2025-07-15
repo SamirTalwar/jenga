@@ -11,4 +11,5 @@ If you don't want to run the tutorial steps yourself, you can just browse the cr
 1. [Getting started](01_getting_started.md)
 2. [More rules](02_more_rules.md)
 3. [Build artifacts and the build cache](03_artifacts_and_cache.md)
-4. [Options to control jenga build](04_options.md)
+4. [Options to control the jenga build](04_options.md)
+5. [Dynamic build dependencies](05_dynamic_deps.md)
