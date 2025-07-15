@@ -181,3 +181,6 @@ A: gcc -c -Wall -o main.o main.c
 A: gcc -c -Wall -o fib.o fib.c
 ran 2 actions
 ```
+
+Continue the jenga tutorial by learning about
+[build artifacts and the build cache](03_artifacts_and_cache.md).
