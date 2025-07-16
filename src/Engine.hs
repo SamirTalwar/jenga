@@ -15,6 +15,7 @@ import Data.Map qualified as Map
 import Interface (G(..),D(..),Rule(..),Action(..),Key(..),Loc(..))
 import StdBuildUtils ((</>),dirLoc)
 import System.Directory (listDirectory,createDirectoryIfMissing,withCurrentDirectory,removePathForcibly,copyFile,getHomeDirectory)
+import System.Environment (lookupEnv)
 import System.Exit(ExitCode(..))
 import System.FileLock (tryLockFile,SharedExclusive(Exclusive),unlockFile)
 import System.FilePath qualified as FP
@@ -38,8 +39,12 @@ engineMain userProg = do
   cacheDir <-
     case cacheDirSpec of
       CacheDirDefault -> do
-        home <- getHomeDirectory
-        pure (Loc home </> ".cache/jenga")
+        lookupEnv "XDG_CACHE_HOME" >>= \case
+          Just cache -> do
+            pure (Loc cache </> "jenga")
+          Nothing -> do
+            home <- getHomeDirectory
+            pure (Loc home </> ".cache/jenga")
       CacheDirChosen dir -> do
         pure (Loc dir  </> ".cache/jenga")
       CacheDirTemp -> do
