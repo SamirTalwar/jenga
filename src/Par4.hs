@@ -85,8 +85,10 @@ parse filename parStart chars0  = do
         error $ printf "%s: unparsed input from: %s" filename (report i)
 
   where
+    _seeall :: String = printf "\nContents:%s\n%s%s\n" bar chars0 bar
+    bar = "------------------------------"
     report :: Int -> String
-    report i = item ++ " at " ++ show (mkPosition i)
+    report i = item ++ " at " ++ show (mkPosition i) -- ++ _seeall
       where
         item = if i == length chars0 then "<EOF>" else show (chars0 !! i)
 
