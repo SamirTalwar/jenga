@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# Rudimentary watcher mode using `inotifywait` (sudo apt install inotify-tools)
+
+# Run once to start...
+clear
+jenga "$@"
+i=1
+
+# Run via inotifywait..
+# Flags/options: -q(quiet) -m(keep watching) -r(recursive) .(start from dot)
+# Don't pay attention to read/access events.
+# Ignore special directories, and emacs droppings.
+# Maintain a counter to see how often we are being triggered.
+inotifywait -q -m -r . \
+            -e create,modify,delete,move \
+            --exclude '(\.git/|\.cache|,jenga|\.#.*|~)' |
+while read e; do
+  i=$((i+1))
+  clear
+  echo $i -- $e # show the counter and triggering event. (feel free to comment out this line)
+  jenga "$@"
+done
