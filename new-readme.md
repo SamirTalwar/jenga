@@ -70,5 +70,5 @@ To build Jenga from source requires:
 ## Tutorial
 
 Once you have `ghc` and `stack` installed, please proceed to the
-[tutorial index](tutorial/index.md) to get `jenga` built and installed,
+[tutorial index](tutorial/README.md) to get `jenga` built and installed,
 and to learn how to setup and run jenga builds.

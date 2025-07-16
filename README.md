@@ -31,7 +31,7 @@ The easiest way to get `ghc` haskell and `stack` is via [ghcup](https://www.hask
 ## Getting started
 
 Once you have `ghc` and `stack` installed, please proceed to the
-[tutorial index](tutorial/index.md) to get `jenga` installed,
+[tutorial index](tutorial/README.md) to get `jenga` installed,
 and learn how to run jenga builds.
 
 You might also like to browse the [source code](src) and [tests](test) for jenga.
