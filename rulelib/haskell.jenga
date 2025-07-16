@@ -1,8 +1,9 @@
 
 ## Build rules for haskell to be included within a build.jenga file
-## caller must define:
-##   executable-name ghc-version ghc-options default-extensions pkgdb packages main-entry
-## executable-name must be pre-defined (before the include)
+
+## caller must pre-define (before the include): executable-name
+## caller must also define: main-entry ghc-version pkgdb
+## caller may optionally define: ghc-options default-extensions packages
 
 hs.files : all.files
   grep '.hs$' all.files > hs.files
@@ -35,7 +36,8 @@ ghc.compiler : ghc.exe pkgdb all.options
   echo exec $(cat ghc.exe) -package-db $(cat pkgdb) $(cat all.options) '"$@"' > ghc.compiler
   chmod +x ghc.compiler
 
-all.options : ghc-options default-extensions
+all.options : ?ghc-options ?default-extensions
+  touch ghc-option default-extensions
   (cat ghc-options ; cat default-extensions | sed 's|^|-X|') | sort > all.options
 
 ghc.linker : ghc.exe pkgdb packs
@@ -44,5 +46,6 @@ ghc.linker : ghc.exe pkgdb packs
 
 ## TODO: automate the discovery of the package-id hashes
 
-packs: packages
+packs: ?packages
+  touch packages
   cat packages | sed 's|^|-package-id |' | sort | uniq > packs
