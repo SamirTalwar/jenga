@@ -13,8 +13,6 @@ instance Functor G where fmap = liftM
 instance Applicative G where pure = GRet; (<*>) = ap
 instance Monad G where (>>=) = GBind
 
--- TODO: consider passing the "dir" context as read-info in the G monad
-
 data G a where
   GRet :: a -> G a
   GBind :: G a -> (a -> G b) -> G b

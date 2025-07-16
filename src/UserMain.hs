@@ -1,10 +1,10 @@
 module UserMain (main) where
 
-import MakeStyle qualified (elaborate)
+import Data.List.Ordered (nubSort)
 import Engine (engineMain)
 import Interface (G(..),Key(..),Loc(..))
+import MakeStyle qualified (elaborate)
 import StdBuildUtils ((</>))
-import Data.List.Ordered (nubSort)
 
 main :: IO ()
 main = engineMain $ \args -> do
@@ -21,7 +21,6 @@ elaborateConfig dir = do
     True -> MakeStyle.elaborate (Key config)
     False -> pure ()
 
--- TODO: Maybe use find
 findStartingPointsFromTopLoc :: String -> G [Loc]
 findStartingPointsFromTopLoc arg = do
   let loc = Loc arg
