@@ -1,7 +1,7 @@
 
-# Comparison between Jenga with other build systems
+# Comparison between Jenga and other build systems
 
-Which of Jenga's features are present or missing in other build tools?\
+Which of Jenga's features are present in other build tools?\
 [Make](https://en.wikipedia.org/wiki/Make_(software))
 [Shake](https://shakebuild.com/)
 [Bazel](https://bazel.build/)
@@ -12,21 +12,21 @@ Which of Jenga's features are present or missing in other build tools?\
 .
 
 - __General Purpose__: Jenga, Make, Shake, Bazel, Buck, Ninja and Jenga-v1.\
-_Missing_: Dune.
+_Nope_: Dune.
 
 - __Sandboxing__: Jenga, Bazel, Buck and Dune.\
-_Missing_: Make, Shake, Ninja, and Jenga-v1.
+_Nope_: Make, Shake, Ninja, and Jenga-v1.
 
 - __Caching__: Jenga, Bazel and Buck.\
-_Missing_: Make, Shake, Ninja, Dune and Jenga-v1.
+_Nope_: Make, Shake, Ninja, Dune and Jenga-v1.
 
 - __Powerful__: Jenga, Shake, and Jenga-v1.\
-_Missing_: Make, Bazel, Buck, Ninja and Dune.
-
-Neil Mitchell (author of Shake and major contributor to Buck2) describes monadic dependencies as ["the most important thing shake got right"](https://neilmitchell.blogspot.com/2021/09/reflecting-on-shake-build-system.html).
+_Nope_: Make, Bazel, Buck, Ninja and Dune.
 
 - __Simple__: Jenga, Make, Ninja.\
-_Missing_: Shake, Bazel, Buck, Dune and Jenga-v1.
+_Nope_: Shake, Bazel, Buck, Dune and Jenga-v1.
+
+Neil Mitchell (author of Shake and major contributor to Buck2) describes monadic dependencies as ["the most important thing shake got right"](https://neilmitchell.blogspot.com/2021/09/reflecting-on-shake-build-system.html).
 
 Simplicity is of course somewhat in the eye of the beholder,
 although I never met anyone who thought Bazel was simple.

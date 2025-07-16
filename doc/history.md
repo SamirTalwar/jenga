@@ -2,7 +2,7 @@
 ## History of Jenga
 
 This project is a redo of the Jenga build system, which I first wrote whilst working for Jane Street in around 2010.
-The original version of Jenga was used at Jane Street after I left in 2016 and right up until 2024.
+The original version of Jenga was used at Jane Street after I left in 2016, right up until 2024.
 [As discussed in this Jane Street Blog](https://blog.janestreet.com/how-we-accidentally-built-a-better-build-system-for-ocaml-index/).
 
 Jane Street has now switched to using the Dune build system.
