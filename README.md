@@ -1,6 +1,6 @@
 # Jenga
 
-Jenga is a powerful language agnostic build tool, providing safe, fast, incremental builds for anything!
+Jenga is a powerful, language-agnostic build tool, providing safe, fast, incremental builds for anything!
 
 Its defining features are:
 1. Sandboxing.
@@ -18,7 +18,7 @@ Skip the features; jump directly to [getting started](tutorial/01_getting_starte
 [How does Jenga compare with other build systems?](doc/comparison.md)
 
 - __General Purpose__:
-Jenga is entirely language agnostic.
+Jenga is entirely language-agnostic.
 Build rules can be constructed for anything which can be run at the command line.
 These rules can be written on a per-project basis or shared more widely.
 Many programming languages come with integrated, language-specific build tooling.
@@ -27,7 +27,7 @@ This is nice right up until your project needs build automation for other stuff:
 - __Sandboxing__:
 Jenga's builds are hermetic.
 Every build action is run in a separate sandbox allowing access only to declared dependencies.
-This ensures no dependency can be missed, which would otherwise lead to an incorrect rebuild.
+This ensures no dependency can be missed which would otherwise lead to an incorrect rebuild.
 This is the core of Jenga's safety claim.
 
 - __Caching__:
@@ -44,9 +44,9 @@ The core interface to Jenga's build engine is a simple haskell [EDSL](src/Interf
 This provides dynamic rule generation and dynamic dependencies (a.k.a. monadic dependencies).
 
 - __Simple__:
-The core rule construction interface is exposed to the Jenga operator via a familiar _make-style_ [DSL](doc/jenga-syntax.md)
-all the while retaining the power of the underlying Haskell EDSL.
-As a bonus, Jenga can exist as standalone executable;
+The rule construction interface is exposed to the Jenga operator via a familiar _make-style_ [DSL](doc/jenga-syntax.md)
+whilst retaining the power of the underlying Haskell EDSL.
+As a bonus, Jenga can exist as a standalone executable;
 a Jenga operator does not require access to a Haskell development system.
 
 - __Parallel__:

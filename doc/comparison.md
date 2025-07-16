@@ -15,15 +15,15 @@ Which of Jenga's features are present in other build tools?\
 _Nope_: Dune.
 
 - __Sandboxing__: Jenga, Bazel, Buck and Dune.\
-_Nope_: Make, Shake, Ninja, and Jenga-v1.
+_Nope_: Make, Shake, Ninja and Jenga-v1.
 
 - __Caching__: Jenga, Bazel and Buck.\
 _Nope_: Make, Shake, Ninja, Dune and Jenga-v1.
 
-- __Powerful__: Jenga, Shake, and Jenga-v1.\
+- __Powerful__: Jenga, Shake and Jenga-v1.\
 _Nope_: Make, Bazel, Buck, Ninja and Dune.
 
-- __Simple__: Jenga, Make, Ninja.\
+- __Simple__: Jenga, Make and Ninja.\
 _Nope_: Shake, Bazel, Buck, Dune and Jenga-v1.
 
 Neil Mitchell (author of Shake and major contributor to Buck2) describes monadic dependencies as ["the most important thing shake got right"](https://neilmitchell.blogspot.com/2021/09/reflecting-on-shake-build-system.html).

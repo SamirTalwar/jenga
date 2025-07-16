@@ -7,7 +7,7 @@ The original version of Jenga was used at Jane Street after I left in 2016, righ
 
 Jane Street has now switched to using the Dune build system.
 Dune is one of the better build systems out there, although it is focussed on building just Ocaml,
-whereas Jenga (original and this redo) are language agnostic build systems.
+whereas Jenga (original and this redo) are language-agnostic build systems.
 
 Recently I was nerd-sniped into re-implementing Jenga after discussion with friends.
 I was quite proud of the original Jenga; I really like the concept of a general purpose build system.
