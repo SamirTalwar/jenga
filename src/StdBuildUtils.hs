@@ -36,4 +36,10 @@ dirLoc :: Loc -> Loc
 dirLoc (Loc fp) = Loc (FP.takeDirectory fp)
 
 (</>) :: Loc -> String -> Loc
-(</>) (Loc dir) filename = Loc (FP.normalise (dir FP.</> filename))
+(</>) (Loc dir) filename0 =
+  Loc (FP.normalise (dir FP.</> filename))
+  where
+    filename =
+      case filename0 of
+        '/':afterLeadingSlash -> afterLeadingSlash
+        rel -> rel
