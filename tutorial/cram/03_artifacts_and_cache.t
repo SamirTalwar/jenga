@@ -34,7 +34,7 @@ Double build
 
 What are the targets?
 
-  $ jenga build -c. -t
+  $ jenga list-targets -c.
   example/fib.o
   example/main.o
   example/hello.exe
@@ -52,10 +52,10 @@ What are the targets?
 
 Controlling the scope of what to build
 
-  $ jenga build -c. copied
+  $ jenga build copied -c.
   elaborated 3 rules and 3 targets
 
-  $ jenga build -c. copied -t
+  $ jenga list-targets copied -c.
   copied/fib.o
   copied/main.o
   copied/hello.exe

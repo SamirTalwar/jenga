@@ -63,7 +63,7 @@ Artifacts (materialize all)
 
 Targets:
 
-  $ jenga build -t
+  $ jenga list-targets
   example/main.o
   example/fib.o
   example/c.rules
@@ -75,7 +75,7 @@ Targets:
 
 Rules:
 
-  $ jenga build -r
+  $ jenga list-rules
   example/main.o : example/main.c example/fib.h example/defs.h
     cd example ; gcc -c -o main.o main.c
   

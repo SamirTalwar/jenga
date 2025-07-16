@@ -48,13 +48,13 @@ See the depends
 
 See the targets and rules
 
-  $ jenga build -t
+  $ jenga list-targets
   example/depends
   example/fib.o
   example/main.o
   example/hello.exe
 
-  $ jenga build -r
+  $ jenga list-rules
   example/depends : example/main.c example/fib.c
     cd example ; gcc -MG -MM *.c > depends
   

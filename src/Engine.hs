@@ -58,7 +58,7 @@ elaborateAndBuild cacheDir config@Config{buildMode,args} userProg = do
     ModeListTargets -> do
       runB cacheDir config $ do
         system <- runElaboration config (userProg args)
-        --reportSystem config system
+        reportSystem config system
         let System{rules} = system
         let allTargets = [ target | Rule{hidden,targets} <- rules, target <- targets, not hidden ]
         sequence_ [ BLog (show key) | key <- allTargets ]
@@ -67,7 +67,7 @@ elaborateAndBuild cacheDir config@Config{buildMode,args} userProg = do
     ModeListRules -> do
       runB cacheDir config $ do
         system <- runElaboration config (userProg args)
-        --reportSystem config system
+        reportSystem config system
         let System{how,rules} = system
         staticRules :: [StaticRule] <- concat <$>
           sequence [ do (deps,action@Action{hidden=actionHidden}) <- gatherDeps config how depcom
