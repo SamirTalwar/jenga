@@ -10,13 +10,13 @@ This section explores the use of dynamic dependencies in jenga rules.
 In our running example, here was the previous state of `build.jenga`
 ```
 hello.exe : main.o fib.o
-  gcc -o hello.exe main.o fib.o
+  gcc main.o fib.o -o hello.exe
 
 main.o : main.c fib.h
-  gcc -Wall -c -o main.o main.c
+  gcc -Wall -c main.c -o main.o
 
 fib.o : fib.c fib.h
-  gcc -Wall -c -o fib.o fib.c
+  gcc -Wall -c fib.c -o fib.o
 ```
 
 This works, and is fine for a tiny fixed example like this. But in bigger examples it becomes very tedious to explicitly list all dependencies for the compilation rules.
@@ -31,13 +31,13 @@ By running `gcc` with specific flags (`-MG -MM`) it will produce a file which li
 This is our new `build.jenga`.
 ```
 hello.exe : main.o fib.o
-  gcc -o hello.exe main.o fib.o
+  gcc main.o fib.o -o hello.exe
 
 main.o : @depends
-  gcc -Wall -c -o main.o main.c
+  gcc -Wall -c main.c -o main.o
 
 fib.o : @depends
-  gcc -Wall -c -o fib.o fib.c
+  gcc -Wall -c fib.c -o fib.o
 
 depends : main.c fib.c
   gcc -MG -MM *.c > depends
@@ -53,9 +53,9 @@ $ jenga build -f
 using temporary cache: /tmp/.cache/jenga/619096
 elaborated 4 rules and 4 targets
 A: gcc -MG -MM *.c > depends
-A: gcc -Wall -c -o fib.o fib.c
-A: gcc -Wall -c -o main.o main.c
-A: gcc -o hello.exe main.o fib.o
+A: gcc -Wall -c fib.c -o fib.o
+A: gcc -Wall -c main.c -o main.o
+A: gcc main.o fib.o -o hello.exe
 ran 4 actions
 
 $ jenga run example/hello.exe
@@ -76,7 +76,7 @@ We make use of this file in the build rules for `fib.o` and `main.o`.
 For example.
 ```
 main.o : @depends
-  gcc -Wall -c -o main.o main.c
+  gcc -Wall -c main.c -o main.o
 ```
 
 The `@` syntax marks dynamic dependencies, and tells Jenga that the dependencies for `main.o` can be found by _first_ building the file `depends` and then _reading_ that file to discover what the dependencies actually are.
@@ -87,54 +87,56 @@ This is exactly what we want!
 If we run `jenga list-rules` or `jenga build -r`,
 Jenga will show us exactly what the build rules look like once all dynamic dependencies are resolved.
 ```
-$ jenga build -r
+$ jenga list-rules -a
+elaborated 4 rules and 4 targets
 example/depends : example/main.c example/fib.c
   cd example ; gcc -MG -MM *.c > depends
 
 example/fib.o : example/fib.c example/fib.h
-  cd example ; gcc -Wall -c -o fib.o fib.c
+  cd example ; gcc -Wall -c fib.c -o fib.o
 
 example/main.o : example/main.c example/fib.h
-  cd example ; gcc -Wall -c -o main.o main.c
+  cd example ; gcc -Wall -c main.c -o main.o
 
 example/hello.exe : example/main.o example/fib.o
-  cd example ; gcc -o hello.exe main.o fib.o
+  cd example ; gcc main.o fib.o -o hello.exe
 ```
 
 If we list the rules from within the `example` directory, they are somewhat more concise, but provide exactly the same information.
 ```
-$ (cd example; jenga build -r)
+$ (cd example; jenga list-rules -)
+elaborated 4 rules and 4 targets
 depends : main.c fib.c
   gcc -MG -MM *.c > depends
 
 fib.o : fib.c fib.h
-  gcc -Wall -c -o fib.o fib.c
+  gcc -Wall -c fib.c -o fib.o
 
 main.o : main.c fib.h
-  gcc -Wall -c -o main.o main.c
+  gcc -Wall -c main.c -o main.o
 
 hello.exe : main.o fib.o
-  gcc -o hello.exe main.o fib.o
+  gcc main.o fib.o -o hello.exe
 ```
 
 To produce the rule listing, Jenga must do a partial build.
 We can see this if we add the `-f` flag.
 Now it is explicit that jenga had to build the `depends` target.
 ```
-$ (cd example; jenga build -fr)
-using temporary cache: /tmp/.cache/jenga/619858
+using temporary cache: /tmp/.cache/jenga/225203
+elaborated 4 rules and 4 targets
 A: gcc -MG -MM *.c > depends
 depends : main.c fib.c
   gcc -MG -MM *.c > depends
 
 fib.o : fib.c fib.h
-  gcc -Wall -c -o fib.o fib.c
+  gcc -Wall -c fib.c -o fib.o
 
 main.o : main.c fib.h
-  gcc -Wall -c -o main.o main.c
+  gcc -Wall -c main.c -o main.o
 
 hello.exe : main.o fib.o
-  gcc -o hello.exe main.o fib.o
+  gcc main.o fib.o -o hello.exe
 ran 1 action
 ```
 
