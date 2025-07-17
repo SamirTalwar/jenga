@@ -29,13 +29,13 @@ int fib(int x) {
 build.jenga
 ```
 hello.exe : main.o fib.o
-  gcc -o hello.exe main.o fib.o
+  gcc main.o fib.o -o hello.exe
 
 main.o : main.c
-  gcc -c -o main.o main.c
+  gcc -c main.c -o main.o
 
 fib.o : fib.c
-  gcc -c -o fib.o fib.c
+  gcc -c fib.c -o fib.o
 ```
 
 These build rules implement the standard approach of separate compilation and linking.
@@ -44,21 +44,20 @@ Each `.c` file is independently compiled to a `.o` file using `gcc -c`. Then the
 Note how each rule explicitly lists all of its dependencies. Any file which is required for the build action to run must be listed. If any dependencies are missing, then the compilation and hence the entire build will fail.
 This is a good thing! Build systems which don't use sandboxing when running build actions may suffer from _accidental_ build success. This is a very bad thing. It means that if a file changes that was read by a build action but was not explicitly listed as a dependency, then a rebuild wont rerun that action, leading to incorrect builds. The developer nightmare!
 
-Let's build and run this example.
+Let's build this example.
 Jenga responds by running the three actions in the correct order as determined by their dependencies.
 ```
-$ jenga build && ,jenga/hello.exe
+$ jenga build
 elaborated 3 rules and 3 targets
-A: gcc -c -o fib.o fib.c
-A: gcc -c -o main.o main.c
-A: gcc -o hello.exe main.o fib.o
+A: gcc -c fib.c -o fib.o
+A: gcc -c main.c -o main.o
+A: gcc main.o fib.o -o hello.exe
 ran 3 actions
-Hello, 55 jenga!
 ```
 
-Unfortunately something is wrong. The exit code when running our executable is 17.
+Let's run the executable. Unfortunately something is wrong. The exit code is 17.
 ```
-,jenga/hello.exe; echo $?
+$ ,jenga/hello.exe; echo $?
 Hello, 55 jenga!
 17
 ```
@@ -70,19 +69,19 @@ But first, lets switch up our compiler warnings so we get properly notified abou
 We'll change both `gcc -c` actions to add the `-Wall` flag.
 ```
 main.o : main.c
-  gcc -c -Wall -o main.o main.c
+  gcc -Wall -c main.c -o main.o
 
 fib.o : fib.c
-  gcc -c -Wall -o fib.o fib.c
+  gcc -Wall -c fib.c -o fib.o
 ```
 
 Rebuild. Jenga knows that even though we didn't modify any source file, the compile actions have changed and so must be rerun.
 ```
 $ jenga build
 elaborated 3 rules and 3 targets
-A: gcc -c -Wall -o fib.o fib.c
-A: gcc -c -Wall -o main.o main.c
-main.c:3:6: warning: return type of 'main' is not 'int' [-Wmain]
+A: gcc -Wall -c fib.c -o fib.o
+A: gcc -Wall -c main.c -o main.o
+main.c:3:6: warning: return type of ‘main’ is not ‘int’ [-Wmain]
     3 | void main() { // Oops! main should be declared to return int.
       |      ^~~~
 ran 2 actions
@@ -104,10 +103,10 @@ int main() {
 
 Rebuild. Jenga will rerun the compile step for the changed `main.c` (source has changed) and the link step (`main.o` has changed):
 ```
-$ jenga build && ,jenga/hello.exe
+$ jenga run -a hello.exe
 elaborated 3 rules and 3 targets
-A: gcc -c -Wall -o main.o main.c
-A: gcc -o hello.exe main.o fib.o
+A: gcc -Wall -c main.c -o main.o
+A: gcc main.o fib.o -o hello.exe
 ran 2 actions
 Hello, 55 jenga!
 ```
@@ -148,7 +147,7 @@ Unfortunately when we try to build, jenga will report an error.
 ```
 $ jenga build
 elaborated 3 rules and 3 targets
-A: gcc -c -Wall -o fib.o fib.c
+A: gcc -Wall -c fib.c -o fib.o
 fib.c:1:10: fatal error: fib.h: No such file or directory
     1 | #include "fib.h"
       |          ^~~~~~~
@@ -164,21 +163,21 @@ We must fix our build rules to explicitly list the dependencies on `fib.h`. We h
 `build.jenga` now looks like this:
 ```
 hello.exe : main.o fib.o
-  gcc -o hello.exe main.o fib.o
+  gcc main.o fib.o -o hello.exe
 
 main.o : main.c fib.h
-  gcc -c -Wall -o main.o main.c
+  gcc -Wall -c main.c -o main.o
 
 fib.o : fib.c fib.h
-  gcc -c -Wall -o fib.o fib.c
+  gcc -Wall -c fib.c -o fib.o
 ```
 
 Rebuild is successful.
 ```
 $ jenga build
 elaborated 3 rules and 3 targets
-A: gcc -c -Wall -o main.o main.c
-A: gcc -c -Wall -o fib.o fib.c
+A: gcc -Wall -c fib.c -o fib.o
+A: gcc -Wall -c main.c -o main.o
 ran 2 actions
 ```
 

@@ -1,4 +1,3 @@
-
 hello.exe : main.o fib.o
   gcc main.o fib.o -o hello.exe
 
