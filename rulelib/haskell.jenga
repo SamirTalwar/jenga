@@ -6,7 +6,7 @@
 ## caller may optionally define: ghc-options default-extensions packages
 
 hs.files : all.files
-  grep '.hs$' all.files > hs.files
+  egrep '^[^#]+.hs$' all.files > hs.files # ignore filenames containing '#'
   echo main.hs >> hs.files
 
 main.hs : main-entry
