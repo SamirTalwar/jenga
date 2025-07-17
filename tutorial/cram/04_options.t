@@ -7,7 +7,7 @@
 
 Get the example.
 
-  $ cp -rp $TESTDIR/../files/03 example
+  $ cp -rp $TESTDIR/../files/04 example
 
 copied from the markdown...
 
@@ -89,16 +89,6 @@ Temporary cache
   A: gcc main.o fib.o -o hello.exe
   ran 3 actions
 
-  $ jenga build -fj2 | sed 's|/tmp/.cache/jenga/[0-9]*|/tmp/.cache/jenga/$$|'
-  using temporary cache: /tmp/.cache/jenga/$$
-  elaborated 6 rules and 6 targets
-  A: gcc -Wall -c fib.c -o fib.o
-  ran 1 action
-  using temporary cache: /tmp/.cache/jenga/$$
-  elaborated 6 rules and 6 targets
-  A: gcc -Wall -c main.c -o main.o
-  A: gcc main.o fib.o -o hello.exe
-  ran 2 actions
-
 Non deterministic
+$ jenga build -fj2 | sed 's|/tmp/.cache/jenga/[0-9]*|/tmp/.cache/jenga/$$|'
 $ jenga build -fj2 --show-pid

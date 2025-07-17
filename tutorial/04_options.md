@@ -3,10 +3,10 @@
 
 This section explore some of Jenga's command line options which control how the build is performed.
 
-The examples files are unchanged from the previous section of the tutorial.
-
-- [Here](files/03) are the files used in this section of the tutorial.
+- [Here](files/04) are the files used in this section of the tutorial.
 - [Here](cram/04_options.t) is the companion cram file.
+
+The examples files are unchanged from the previous section of the tutorial.
 
 ## Help (`jenga -h`)
 
