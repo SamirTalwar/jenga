@@ -22,9 +22,9 @@ Build. Expect 4 actions to be run
   $ jenga build
   elaborated 4 rules and 4 targets
   A: gcc -MG -MM *.c > depends
-  A: gcc -Wall -c -o fib.o fib.c
-  A: gcc -Wall -c -o main.o main.c
-  A: gcc -o hello.exe main.o fib.o
+  A: gcc -Wall -c fib.c -o fib.o
+  A: gcc -Wall -c main.c -o main.o
+  A: gcc main.o fib.o -o hello.exe
   ran 4 actions
 
   $ find ,jenga
@@ -59,10 +59,10 @@ See the targets and rules
     cd example ; gcc -MG -MM *.c > depends
   
   example/fib.o : example/fib.c example/fib.h
-    cd example ; gcc -Wall -c -o fib.o fib.c
+    cd example ; gcc -Wall -c fib.c -o fib.o
   
   example/main.o : example/main.c example/fib.h
-    cd example ; gcc -Wall -c -o main.o main.c
+    cd example ; gcc -Wall -c main.c -o main.o
   
   example/hello.exe : example/main.o example/fib.o
-    cd example ; gcc -o hello.exe main.o fib.o
+    cd example ; gcc main.o fib.o -o hello.exe

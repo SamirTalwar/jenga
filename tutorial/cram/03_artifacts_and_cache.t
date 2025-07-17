@@ -16,9 +16,9 @@ Initial build. Expect 3 actions to be run
 
   $ jenga build -c.
   elaborated 3 rules and 3 targets
-  A: gcc -Wall -c -o fib.o fib.c
-  A: gcc -Wall -c -o main.o main.c
-  A: gcc -o hello.exe main.o fib.o
+  A: gcc -Wall -c fib.c -o fib.o
+  A: gcc -Wall -c main.c -o main.o
+  A: gcc main.o fib.o -o hello.exe
   ran 3 actions
 
 Zero build
@@ -70,9 +70,9 @@ Using a non-default cache:
 
   $ jenga build --cache=my-cache
   elaborated 6 rules and 6 targets
-  A: gcc -Wall -c -o fib.o fib.c
-  A: gcc -Wall -c -o main.o main.c
-  A: gcc -o hello.exe main.o fib.o
+  A: gcc -Wall -c fib.c -o fib.o
+  A: gcc -Wall -c main.c -o main.o
+  A: gcc main.o fib.o -o hello.exe
   ran 3 actions
 
 Using a non-default cache (still get minimal builds)
@@ -85,17 +85,17 @@ Using a temporary cache with -f. Forces run of all the actions
   $ jenga build -f | sed 's|/tmp/.cache/jenga/[0-9]*|/tmp/.cache/jenga/$$|'
   using temporary cache: /tmp/.cache/jenga/$$
   elaborated 6 rules and 6 targets
-  A: gcc -Wall -c -o fib.o fib.c
-  A: gcc -Wall -c -o main.o main.c
-  A: gcc -o hello.exe main.o fib.o
+  A: gcc -Wall -c fib.c -o fib.o
+  A: gcc -Wall -c main.c -o main.o
+  A: gcc main.o fib.o -o hello.exe
   ran 3 actions
 
   $ jenga build -f | sed 's|/tmp/.cache/jenga/[0-9]*|/tmp/.cache/jenga/$$|'
   using temporary cache: /tmp/.cache/jenga/$$
   elaborated 6 rules and 6 targets
-  A: gcc -Wall -c -o fib.o fib.c
-  A: gcc -Wall -c -o main.o main.c
-  A: gcc -o hello.exe main.o fib.o
+  A: gcc -Wall -c fib.c -o fib.o
+  A: gcc -Wall -c main.c -o main.o
+  A: gcc main.o fib.o -o hello.exe
   ran 3 actions
 
 Where are the targets? ,jenga dir is created relative to where the build started
@@ -168,9 +168,9 @@ Rebuild, hardlink counts back to 2
 
   $ jenga build -c.
   elaborated 3 rules and 3 targets
-  A: gcc -Wall -c -o fib.o fib.c
-  A: gcc -Wall -c -o main.o main.c
-  A: gcc -o hello.exe main.o fib.o
+  A: gcc -Wall -c fib.c -o fib.o
+  A: gcc -Wall -c main.c -o main.o
+  A: gcc main.o fib.o -o hello.exe
   ran 3 actions
 
   $ find ,jenga -type f | xargs stat -c "%h %n"

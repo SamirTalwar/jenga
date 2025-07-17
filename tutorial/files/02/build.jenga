@@ -1,9 +1,9 @@
 
 hello.exe : main.o fib.o
-  gcc -o hello.exe main.o fib.o
+  gcc main.o fib.o -o hello.exe
 
 main.o : main.c
-  gcc -c -o main.o main.c
+  gcc -c main.c -o main.o
 
 fib.o : fib.c
-  gcc -c -o fib.o fib.c
+  gcc -c fib.c -o fib.o

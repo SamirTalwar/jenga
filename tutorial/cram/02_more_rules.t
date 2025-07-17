@@ -21,9 +21,9 @@ Initial build. Expect 3 actions to be run
 
   $ jenga build && ,jenga/hello.exe
   elaborated 3 rules and 3 targets
-  A: gcc -c -o fib.o fib.c
-  A: gcc -c -o main.o main.c
-  A: gcc -o hello.exe main.o fib.o
+  A: gcc -c fib.c -o fib.o
+  A: gcc -c main.c -o main.o
+  A: gcc main.o fib.o -o hello.exe
   ran 3 actions
   Hello, 55 jenga!
   [17]
@@ -41,18 +41,18 @@ Add -Wall to both compile rule. Two actions get rerun.
   $ cat build.jenga
   
   hello.exe : main.o fib.o
-    gcc -o hello.exe main.o fib.o
+    gcc main.o fib.o -o hello.exe
   
   main.o : main.c
-    gcc -c -Wall -o main.o main.c
+    gcc -c -Wall main.c -o main.o
   
   fib.o : fib.c
-    gcc -c -Wall -o fib.o fib.c
+    gcc -c -Wall fib.c -o fib.o
 
   $ jenga build
   elaborated 3 rules and 3 targets
-  A: gcc -c -Wall -o fib.o fib.c
-  A: gcc -c -Wall -o main.o main.c
+  A: gcc -c -Wall fib.c -o fib.o
+  A: gcc -c -Wall main.c -o main.o
   main.c:3:6: warning: return type of 'main' is not 'int' [-Wmain]
       3 | void main() { // Oops! main should be declared to return int.
         |      ^~~~
@@ -69,8 +69,8 @@ Fix code. Compile of main.c and link are rerun
   }
   $ jenga build && ,jenga/hello.exe
   elaborated 3 rules and 3 targets
-  A: gcc -c -Wall -o main.o main.c
-  A: gcc -o hello.exe main.o fib.o
+  A: gcc -c -Wall main.c -o main.o
+  A: gcc main.o fib.o -o hello.exe
   ran 2 actions
   Hello, 55 jenga!
 
@@ -95,7 +95,7 @@ Define and use header file. Build fails because we failed to declare dependecy o
 
   $ jenga build 2>&1 | grep -v 'called at'
   elaborated 3 rules and 3 targets
-  A: gcc -c -Wall -o fib.o fib.c
+  A: gcc -c -Wall fib.c -o fib.o
   fib.c:1:10: fatal error: fib.h: No such file or directory
       1 | #include "fib.h"
         |          ^~~~~~~
@@ -109,16 +109,16 @@ Add missing dep to both compile rules
   $ cat build.jenga
   
   hello.exe : main.o fib.o
-    gcc -o hello.exe main.o fib.o
+    gcc main.o fib.o -o hello.exe
   
   main.o : main.c fib.h
-    gcc -c -Wall -o main.o main.c
+    gcc -c -Wall main.c -o main.o
   
   fib.o : fib.c fib.h
-    gcc -c -Wall -o fib.o fib.c
+    gcc -c -Wall fib.c -o fib.o
 
   $ jenga build
   elaborated 3 rules and 3 targets
-  A: gcc -c -Wall -o fib.o fib.c
-  A: gcc -c -Wall -o main.o main.c
+  A: gcc -c -Wall fib.c -o fib.o
+  A: gcc -c -Wall main.c -o main.o
   ran 2 actions

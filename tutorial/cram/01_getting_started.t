@@ -18,7 +18,7 @@ Get the example.
 Build. See one build action.
   $ jenga build
   elaborated 1 rule and 1 target
-  A: gcc -o hello.exe main.c
+  A: gcc main.c -o hello.exe
   ran 1 action
 
 Zero rebuild. See no build actions.
@@ -33,7 +33,7 @@ Modify file and rebuild. See the rebuild action, and the changed output.
   $ sed -i s/world/universe/ main.c
   $ jenga build; ,jenga/hello.exe
   elaborated 1 rule and 1 target
-  A: gcc -o hello.exe main.c
+  A: gcc main.c -o hello.exe
   ran 1 action
   Hello, jenga universe!
 
