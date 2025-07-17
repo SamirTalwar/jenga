@@ -1,6 +1,5 @@
 module MakeStyle (elaborate) where
 
-import Data.List (intercalate)
 import Data.List.Split (splitOn)
 import Interface (G(..),Rule(..),Action(..),D(..),Key(..),Loc(..))
 import Par4 (Position(..),Par,parse,position,skip,alts,many,some,sat,lit,key)
@@ -27,18 +26,20 @@ elaborate config0  = do
           ClauseInclude filename -> elabRuleFile (makeKey filename)
 
         elabTrip :: Trip -> G ()
-        elabTrip Trip{pos=Position{line},targets,deps,command} = do
+        elabTrip Trip{pos=Position{line},targets,deps,commands} = do
           let rulename = printf "%s:%d" (show config) line
           GRule $ Rule
             { rulename
             , dir
             , hidden = False
             , targets = map makeKey targets
-            , depcom = do sequence_ [ makeDep targets dep | dep <- deps ];  pure (bash command)
+            , depcom = do
+                sequence_ [ makeDep targets dep | dep <- deps ]
+                pure (bash commands)
             }
 
-    bash :: String -> Action
-    bash command = Action { hidden = False, command }
+    bash :: [String] -> Action
+    bash commands = Action { hidden = False, commands }
 
     makeDep targets = \case
       DepPlain file -> DNeed (makeKey file)
@@ -65,9 +66,9 @@ elaborate config0  = do
                   , targets = [ makeKey allFilesName ]
                   , depcom = pure (Action
                                     { hidden = True
-                                    , command = printf "echo -n '%s' > %s"
-                                                (unlines (map baseKey allFiles))
-                                                allFilesName
+                                    , commands = [printf "echo -n '%s' > %s"
+                                                  (unlines (map baseKey allFiles))
+                                                  allFilesName]
                                     })})
 
     -- drop filenames which contain a '#' char
@@ -100,7 +101,7 @@ data Trip = Trip
   { pos :: Position
   , targets :: [String]
   , deps :: [Dep]
-  , command :: String
+  , commands :: [String]
   }
 
 data Dep
@@ -136,14 +137,14 @@ gram = start
       targets <- some identifier
       colon
       deps <- many dep
-      command <- alts [tradRule,onelineRule]
+      commands <- alts [tradRule,onelineRule]
       skip $ alts [nl,commentToEol]
-      pure (ClauseTrip (Trip {pos,targets,deps,command}))
+      pure (ClauseTrip (Trip {pos,targets,deps,commands}))
 
     -- traditional make syntax
     tradRule = do
       alts [nl,commentToEol]
-      (intercalate " ; " . filter (\case "" -> False; _ -> True)) <$> many indentedCommand
+      (filter (\case "" -> False; _ -> True)) <$> many indentedCommand
 
     indentedCommand = do
       space -- at least one space char to begin the action
@@ -156,7 +157,7 @@ gram = start
       colon
       command <- singleCommandLine
       alts [nl,commentToEol]
-      pure command
+      pure [command]
 
     -- syntax to allow a rule on a single line
     colon = do

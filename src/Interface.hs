@@ -34,7 +34,7 @@ data Rule = Rule
 
 data Action = Action
   { hidden :: Bool
-  , command :: String
+  , commands :: [String]
   }
 
 instance Functor D where fmap = liftM
@@ -53,6 +53,5 @@ data Key = Key Loc deriving (Eq,Ord)
 
 data Loc = Loc FilePath deriving (Eq,Ord)
 
-instance Show Action where show Action{command} = command
 instance Show Key where show (Key loc) = show loc
 instance Show Loc where show (Loc fp) = fp

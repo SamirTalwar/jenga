@@ -4,7 +4,7 @@ import CommandLine (LogMode(..),Config(..),BuildMode(..),CacheDirSpec(..))
 import CommandLine qualified (exec)
 import Control.Exception (try,SomeException)
 import Control.Monad (ap,liftM)
-import Control.Monad (when)
+import Control.Monad (when,forM)
 import Data.Hash.MD5 qualified as MD5
 import Data.IORef (newIORef,readIORef,writeIORef)
 import Data.List (intercalate)
@@ -116,9 +116,10 @@ data StaticRule = StaticRule
   }
 
 instance Show StaticRule where
-  show StaticRule{dir,targets,deps,action=Action{command}} = do
+  show StaticRule{dir,targets,deps,action=Action{commands}} = do
     let cdPrefix = if dir == Loc "." then "" else printf "cd %s ; " (show dir)
-    printf "%s : %s\n  %s%s" (seeKeys targets) (seeKeys deps) cdPrefix command
+    let sep = printf "\n  %s" cdPrefix
+    printf "%s : %s%s%s" (seeKeys targets) (seeKeys deps) sep (intercalate sep commands)
 
 seeKeys :: [Key] -> String
 seeKeys = intercalate " " . map show
@@ -255,14 +256,14 @@ doBuild config@Config{logMode} how = do
       Just rule@Rule{depcom} -> do
         let seeV = case logMode of LogVerbose -> True; _ -> False
         when seeV $ BLog (printf "B: Require: %s" (show sought))
-        (deps,action@Action{command}) <- gatherDeps config how depcom
+        (deps,action@Action{commands}) <- gatherDeps config how depcom
 
         wdeps <- (WitMap . Map.fromList) <$>
           parallel [ do digest <- doBuild config how dep; pure (locateKey dep,digest)
                    | dep <- deps
                    ]
 
-        let witKey = WitnessKey { command, wdeps }
+        let witKey = WitnessKey { commands, wdeps }
         let wkd = digestWitnessKey witKey
 
         let
@@ -436,7 +437,7 @@ data Witness = Witness { key :: WitnessKey, val :: WitnessValue }
 data WitnessValue = WitnessValue { wtargets :: WitMap }
 
 -- TODO: target set in witness key? i.e. forcing rerun when add or remove targets
-data WitnessKey = WitnessKey { command :: String, wdeps :: WitMap } deriving Show
+data WitnessKey = WitnessKey { commands :: [String], wdeps :: WitMap } deriving Show
 
 -- TODO: perhaps filemode should be included in the target WitMap
 data WitMap = WitMap (Map Loc Digest) deriving Show
@@ -506,11 +507,16 @@ importWitness s = fromQ <$> readMaybe s
 exportWitness :: Witness -> String
 exportWitness = show . toQ
 
-data QWitness = WIT
-  { command :: String
-  , deps :: QWitMap
-  , targets :: QWitMap
-  }
+data QWitness
+  = WIT { command :: String
+        , deps :: QWitMap
+        , targets :: QWitMap
+        }
+  | TRACE { commands :: [String]
+          , deps :: QWitMap
+          , targets :: QWitMap
+          }
+
   deriving (Show,Read)
 
 type QWitMap = [(FilePath,QDigest)]
@@ -519,17 +525,23 @@ type QDigest = String
 toQ :: Witness -> QWitness
 toQ wit = do
   let Witness{key,val} = wit
-  let WitnessKey{command,wdeps} = key
+  let WitnessKey{commands,wdeps} = key
   let WitnessValue{wtargets} = val
   let fromStore (WitMap m) = [ (fp,digest) | (Loc fp,Digest digest) <- Map.toList m ]
-  WIT { command, deps = fromStore wdeps, targets = fromStore wtargets }
+  TRACE { commands, deps = fromStore wdeps, targets = fromStore wtargets }
 
 fromQ :: QWitness -> Witness
-fromQ WIT{command,deps,targets} = do
-  let toStore xs = WitMap (Map.fromList [ (Loc fp,Digest digest) | (fp,digest) <- xs ])
-  let key = WitnessKey{command, wdeps = toStore deps}
-  let val = WitnessValue{wtargets = toStore targets}
-  Witness{key,val}
+fromQ = \case
+  WIT{command,deps,targets} -> do
+    let toStore xs = WitMap (Map.fromList [ (Loc fp,Digest digest) | (fp,digest) <- xs ])
+    let key = WitnessKey{commands=[command], wdeps = toStore deps}
+    let val = WitnessValue{wtargets = toStore targets}
+    Witness{key,val}
+  TRACE{commands,deps,targets} -> do
+    let toStore xs = WitMap (Map.fromList [ (Loc fp,Digest digest) | (fp,digest) <- xs ])
+    let key = WitnessKey{commands, wdeps = toStore deps}
+    let val = WitnessValue{wtargets = toStore targets}
+    Witness{key,val}
 
 ----------------------------------------------------------------------
 -- B: build monad
@@ -733,19 +745,21 @@ runX Config{logMode,seePid,seeX,seeI} = loop
       XLog mes -> log mes
 
       -- sandboxed execution of user's action; for now always a bash command
-      XRunActionInDir (Loc dir) Action{hidden,command} -> do
-        let showHidden = False -- command line flag?
-        if showHidden
-          then logA $ printf "%s%s" command (if hidden then " (hidden)" else "")
-          else when (not hidden) $ logA $ command
+      XRunActionInDir (Loc dir) Action{hidden,commands} -> all id <$> do
+        forM commands $ \command -> do
 
-        (exitCode,stdout,stderr) <-
-          withCurrentDirectory dir (readCreateProcessWithExitCode (shell command) "")
-        -- TODO: better management & report of stdout/stderr
-        putStr stdout
-        putStr stderr
-        let ok = case exitCode of ExitSuccess -> True; ExitFailure{} -> False
-        pure ok
+          let showHidden = False -- command line flag?
+          if showHidden
+            then logA $ printf "%s%s" command (if hidden then " (hidden)" else "")
+            else when (not hidden) $ logA $ command
+
+          (exitCode,stdout,stderr) <-
+            withCurrentDirectory dir (readCreateProcessWithExitCode (shell command) "")
+          -- TODO: better management & report of stdout/stderr
+          putStr stdout
+          putStr stderr
+          let ok = case exitCode of ExitSuccess -> True; ExitFailure{} -> False
+          pure ok
 
       -- other commands with shell out to external process
       XDigest (Loc fp) -> do
