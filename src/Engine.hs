@@ -266,31 +266,36 @@ doBuild config@Config{logMode} how = do
         let witKey = WitnessKey { commands, wdeps }
         let wkd = digestWitnessKey witKey
 
-        let
-          again = do
-            verifyWitness sought wkd >>= \case
-              Just digest -> do
+        verifyWitness sought wkd >>= \case
+          Just digest -> do
+            pure digest
+
+          Nothing -> do
+            tracesDir <- tracesDir
+            let lockLoc@(Loc lockPath) = tracesDir </> (show wkd ++ ".lock")
+            Execute (XIO (tryLockFile lockPath Exclusive)) >>= \case
+              Just lock -> do
+                --Execute $ XLog (printf "L: obtain %s" lockPath)
+                wtargets <- runJobAndSaveWitness config action wkd witKey wdeps rule
+                let digest = lookWitMap (locateKey sought) wtargets
+                Execute $ do
+                  XUnLink lockLoc -- unlink before unlock -- TODO: why must we unlink?
+                  XIO (unlockFile lock)
+                --Execute $ XLog (printf "L: unlocked %s" lockPath)
                 pure digest
 
               Nothing -> do
-                tracesDir <- tracesDir
-                let lockLoc@(Loc lockPath) = tracesDir </> (show wkd ++ ".lock")
-                Execute (XIO (tryLockFile lockPath Exclusive)) >>= \case
-                  Just lock -> do
-                    wtargets <- runJobAndSaveWitness config action wkd witKey wdeps rule
-                    let digest = lookWitMap (locateKey sought) wtargets
-                    Execute $ do
-                      -- unlink before unlock
-                      XUnLink lockLoc
-                      XIO (unlockFile lock)
-                    pure digest
-                  Nothing -> do
-                    BYield
-                    -- trying again means failed jobs are reattempted
-                    -- which is not necessarily a good strategy
-                    again
-
-        again
+                BYield
+                let
+                  awaitLock =
+                    Execute (XIO (tryLockFile lockPath Exclusive)) >>= \case
+                    Nothing -> do BYield; awaitLock -- spins if this is the only blocked job
+                    Just lock -> do
+                      Execute $ XIO (unlockFile lock)
+                      verifyWitness sought wkd >>= \case
+                        Just digest -> pure digest
+                        Nothing -> undefined -- TODO: other job has failed; so should we
+                awaitLock
 
 
 runJobAndSaveWitness :: Config -> Action -> WitKeyDiget -> WitnessKey -> WitMap -> Rule -> B WitMap
@@ -655,6 +660,8 @@ runB cacheDir config@Config{keepSandBoxes,logMode,jnum} build0 = do
           resume j s { active }
         [] -> case blocked of
           [] -> error "next: no more jobs"
+          [onlyJob] -> do -- TODO: special code to avoid spinning?
+            next s { active = [onlyJob], blocked = [] }
           blocked -> do
             next s { active = reverse blocked, blocked = [] }
 
