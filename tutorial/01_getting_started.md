@@ -65,7 +65,6 @@ mkdir /tmp/j1
 cd /tmp/j1
 cp /tmp/jenga/tutorial/files/01/main.c .
 cp /tmp/jenga/tutorial/files/01/build.jenga .
-jenga build
 ```
 
 Then run `jenga build` in the new directory.
