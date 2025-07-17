@@ -11,9 +11,8 @@ Following a successful download and install of jenga, this tutorial will guide y
 The following steps will download and build `jenga` from source.
 ```
 rm -rf /tmp/jenga
-cd /tmp
-git clone git@github.com:Nick-Chapman/jenga.git
-cd jenga/
+git clone https://github.com/Nick-Chapman/jenga.git /tmp/jenga
+cd /tmp/jenga
 stack build
 ```
 
