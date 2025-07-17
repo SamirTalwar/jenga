@@ -21,7 +21,7 @@ This tutorial assumes you have `jenga` available in your path.
 For example, you might choose to link a file `jenga`, in a directory picked up by your path, to the executable built by stack command above.
 ```
 cd ~/.local/bin
-ln -s $(find /tmp/jenga2/.stack-work/dist -type f -name main.exe) jenga
+ln -s $(find /tmp/jenga2/.stack-work/dist -type f -name jenga) jenga
 ```
 
 Now we can display jenga's top level usage/help message.
