@@ -1,5 +1,5 @@
 
-# This is an example with two .c files used to drive early development of jenga2.
+# This is an example with two .c files used to drive early development of jenga.
 # In particular to get the correct sandboxing behaviour.
 # This example is used by tests 1a..1g
 

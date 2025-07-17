@@ -10,10 +10,10 @@ Following a successful download and install of jenga, this tutorial will guide y
 
 The following steps will download and build `jenga` from source.
 ```
-rm -rf /tmp/jenga2
+rm -rf /tmp/jenga
 cd /tmp
-git clone git@github.com:Nick-Chapman/jenga2.git
-cd jenga2/
+git clone git@github.com:Nick-Chapman/jenga.git
+cd jenga/
 stack build
 ```
 
@@ -21,7 +21,7 @@ This tutorial assumes you have `jenga` available in your path.
 For example, you might choose to link a file `jenga`, in a directory picked up by your path, to the executable built by stack command above.
 ```
 cd ~/.local/bin
-ln -s $(find /tmp/jenga2/.stack-work/dist -type f -name jenga) jenga
+ln -s $(find /tmp/jenga/.stack-work/dist -type f -name jenga) jenga
 ```
 
 Now we can display jenga's top level usage/help message.
@@ -65,8 +65,8 @@ Then run `jenga build` in the new directory.
 ```
 mkdir /tmp/j1
 cd /tmp/j1
-cp /tmp/jenga2/tutorial/files/01/main.c .
-cp /tmp/jenga2/tutorial/files/01/build.jenga .
+cp /tmp/jenga/tutorial/files/01/main.c .
+cp /tmp/jenga/tutorial/files/01/build.jenga .
 jenga build
 ```
 
