@@ -8,6 +8,7 @@
   $ jenga build
   elaborated 9 rules and 13 targets
   A: find $HOME/.stack | grep -v lib | grep bin/ghc$ | sort -n | tail -1 > ghc-path
+  A: # Make use of multi-line actions and comments in actions...
   A: echo exec $(cat ghc-path) '"$@"' > ghc.exe
   A: chmod +x ghc.exe
   A: ./ghc.exe -c A.hs

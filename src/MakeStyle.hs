@@ -181,8 +181,7 @@ gram = start
     singleCommandLine = do
       trimTrailingSpace <$> many actionChar
 
-    actionChar = sat $ \case -- anything upto a comment or NL
-      '#' -> False
+    actionChar = sat $ \case -- anything upto a NL (leaving #-comments for bash)
       '\n' -> False
       _ -> True
 
