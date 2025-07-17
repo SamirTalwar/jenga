@@ -1,7 +1,7 @@
 module MakeStyle (elaborate) where
 
 import Data.List.Split (splitOn)
-import Interface (G(..),Rule(..),Action(..),D(..),Key(..),Loc(..))
+import Interface (G(..),Rule(..),Action(..),D(..),Key(..))
 import Par4 (Position(..),Par,parse,position,skip,alts,many,some,sat,lit,key)
 import StdBuildUtils ((</>),dirKey,baseKey)
 import Text.Printf (printf)
@@ -59,7 +59,7 @@ elaborate config0  = do
     -- hidden rule so user-rules can access the list of file names
     allFilesName = "all.files"
     allFilesRule =  do
-      allFiles <- map Key . filter noHashInFilename <$> GGlob dir
+      allFiles <- map Key <$> GGlob dir
       GRule (Rule { rulename = printf "glob-%s" (show dir)
                   , dir
                   , hidden = True
@@ -70,12 +70,6 @@ elaborate config0  = do
                                                   (unlines (map baseKey allFiles))
                                                   allFilesName]
                                     })})
-
-    -- drop filenames which contain a '#' char
-    -- plays really badly with make-style syntax
-    -- TODO: need a better solution for this.
-    noHashInFilename :: Loc -> Bool
-    noHashInFilename (Loc name) = not ('#' `elem` name)
 
 filterDepsFor :: [String] -> String -> [String]
 filterDepsFor targets contents = do
