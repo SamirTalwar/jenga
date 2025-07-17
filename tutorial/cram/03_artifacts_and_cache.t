@@ -130,8 +130,6 @@ $ find ,jenga -type f | xargs ls -l
   TRACE {commands = ["gcc main.o fib.o -o hello.exe"], deps = [("fib.o","47a0ee09b975f7501dbeb5431b76c24c"),("main.o","83f35fc3965c22be4e45c16356b74c5b")], targets = [("hello.exe","0fcce4811e995a71fe45c2826bb0868b")]}
 
 
-The following stuff is for section 04...
-
 Double build
 
   $ cp -rp example copied

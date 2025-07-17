@@ -6,7 +6,7 @@ This section explore some of Jenga's command line options which control how the 
 The examples files are unchanged from the previous section of the tutorial.
 
 - [Here](files/03) are the files used in this section of the tutorial.
-
+- [Here](cram/04_options.t) is the companion cram file.
 
 ## Help (`jenga -h`)
 
@@ -53,7 +53,7 @@ We can ask jenga to tell us exactly what targets it knows how to build, and the 
 
 Discover targets with `jenga list-targets` (or `jenga build -t`).
 ```
-$ jenga build -t
+$ jenga list-targets
 example/fib.o
 example/main.o
 example/hello.exe
@@ -61,7 +61,7 @@ example/hello.exe
 
 Discover rules with `jenga list-rules` (or `jenga build -r`).
 ```
-$ jenga build -r
+$ jenga list-rules
 example/fib.o : example/fib.c example/fib.h
   cd example ; gcc -Wall -c -o fib.o fib.c
 
@@ -141,7 +141,7 @@ ran 2 actions
 
 To see which process is doing what work, we can combine with the `--show-pid` (or `-p`) flag.
 ```
-nic@Mosh:/tmp/j3$ jenga build -fj2 --show-pid
+$ jenga build -fj2 --show-pid
 using temporary cache: /tmp/.cache/jenga/502991
 [502993] elaborated 6 rules and 6 targets
 [502991] elaborated 6 rules and 6 targets
