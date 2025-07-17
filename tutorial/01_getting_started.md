@@ -61,7 +61,6 @@ LIST-OF-TARGETS : LIST-OF-DEPENDENCIES
 ```
 Let's work in a fresh directory to try this out.
 First type or copy in the example files.
-Then run `jenga build` in the new directory.
 ```
 mkdir /tmp/j1
 cd /tmp/j1
@@ -70,30 +69,32 @@ cp /tmp/jenga/tutorial/files/01/build.jenga .
 jenga build
 ```
 
-Jenga will respond:
+Then run `jenga build` in the new directory.
 ```
+$ jenga build
 elaborated 1 rule and 1 target
-A: gcc main.c -o hello.exe
+A: gcc -o hello.exe main.c
 ran 1 action
 ```
 
-Now let's run our executable which has been placed in the `,jenga/` artifacts directory.
-We use `jenga run <TARGET>` which works like
-`jenga build && ,jenga/<TARGET>` except the build info messages are elided.
+The executable been placed in the `,jenga/` artifacts directory, which we can run directly, or
+we can use `jenga run -a <TARGET>` to combine the build and execution of a target.
+
+This has the same behaviour as `jenga build && ,jenga/<TARGET>`
+(The `-a` flags shows the build info messages, which would otherwise be hidden by plain `jenga run`).
 ```
-jenga run hello.exe
-```
-And see the output.
-```
+$ jenga run -a hello.exe
+elaborated 1 rule and 1 target
 Hello, jenga world!
 ```
 
-Let's make a change to our source code.
-Edit `main.c` replacing the string `world` with `universe`.
+Let's make a change to our source code:
+edit `main.c` replacing the string `world` with `universe`.
 Rebuild and rerun.
+
 Jenga will rerun the `gcc` action because the input file `main.c` has changed.
 ```
-$ jenga build && ,jenga/hello.exe
+$ jenga run -a hello.exe
 elaborated 1 rule and 1 target
 A: gcc -o hello.exe main.c
 ran 1 action
@@ -107,7 +108,7 @@ This time, no build actions are run.
 Yet the executable correctly reverts to printing the original message.
 This desirable behaviour is an effect of _full caching_.
 ```
-$ jenga build && ,jenga/hello.exe
+$ jenga run -a hello.exe
 elaborated 1 rule and 1 target
 Hello, jenga world!
 ```
