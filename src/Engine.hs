@@ -25,6 +25,8 @@ import System.Process (shell,callProcess,readCreateProcess,readCreateProcessWith
 import Text.Printf (printf)
 import Text.Read (readMaybe)
 
+import System.IO.SafeWrite (syncFile)
+
 ----------------------------------------------------------------------
 -- Engine main
 
@@ -148,8 +150,8 @@ materialize digest key = do
   Execute $ do
     XMakeDir (dirLoc materializedFile)
     XHardLink cacheFile materializedFile >>= \case
-      True -> pure ()
-      False -> do
+      Nothing -> pure ()
+      Just{} -> do
         -- Likely from concurrently runnning jenga
         -- If we do materialization when (just after) the action is run, this wont happen.
         -- XLog (printf "Materialize/HardLink: we lost the race: %s -> %s" (show cacheFile) (show materializedFile))
@@ -268,34 +270,42 @@ doBuild config@Config{logMode} how = do
 
         verifyWitness sought wkd >>= \case
           Just digest -> do
+            --Execute $ XLog (printf "L: witness already exists for %s" (show wkd))
             pure digest
 
           Nothing -> do
+            --Execute $ XLog (printf "L: trying for %s" (show wkd))
             tracesDir <- tracesDir
-            let lockLoc@(Loc lockPath) = tracesDir </> (show wkd ++ ".lock")
+            let Loc lockPath = tracesDir </> (show wkd ++ ".lock")
             Execute (XIO (tryLockFile lockPath Exclusive)) >>= \case
-              Just lock -> do
-                --Execute $ XLog (printf "L: obtain %s" lockPath)
+              Just _lock -> do
+                --Execute $ XLog (printf "L: obtained %s" (show wkd))
                 wtargets <- runJobAndSaveWitness config action wkd witKey wdeps rule
                 let digest = lookWitMap (locateKey sought) wtargets
                 Execute $ do
-                  XUnLink lockLoc -- unlink before unlock -- TODO: why must we unlink?
-                  XIO (unlockFile lock)
-                --Execute $ XLog (printf "L: unlocked %s" lockPath)
+                  XUnLink (Loc lockPath) -- unlink before unlock -- TODO: why must we unlink?
+                  XIO (unlockFile _lock) -- never unlock?
+                  --XLog (printf "L: unlocked %s" (show wkd))
                 pure digest
 
               Nothing -> do
                 BYield
                 let
-                  awaitLock =
+                  awaitLock :: Int -> B Digest
+                  awaitLock i =
                     Execute (XIO (tryLockFile lockPath Exclusive)) >>= \case
-                    Nothing -> do BYield; awaitLock -- spins if this is the only blocked job
+                    Nothing -> do BYield; awaitLock (i+1) -- spins if this is the only blocked job
                     Just lock -> do
+                      --Execute $ XLog (printf "L: finally (%d) obtain %s" i (show wkd))
                       Execute $ XIO (unlockFile lock)
                       verifyWitness sought wkd >>= \case
-                        Just digest -> pure digest
-                        Nothing -> undefined -- TODO: other job has failed; so should we
-                awaitLock
+                        Just digest -> do
+                          --Execute $ XLog (printf "L: witness finally exists for %s" (show wkd))
+                          pure digest
+                        Nothing -> do
+                          --Execute $ XLog "other process encountered build failure"
+                          error "other process encountered build failure"
+                awaitLock 0
 
 
 runJobAndSaveWitness :: Config -> Action -> WitKeyDiget -> WitnessKey -> WitMap -> Rule -> B WitMap
@@ -374,8 +384,17 @@ setupInputs sandbox (WitMap m1) = do
         file <- cacheFile digest
         Execute $ do
           XHardLink file (sandbox </> show loc) >>= \case
-            True -> pure ()
-            False -> error "setupInput/HardLink: we lost the race" -- nothing ought to be racing us!
+            Nothing -> pure ()
+            Just err -> do
+               -- nothing ought to be racing us!
+              pid <- XIO getCurrentPid
+              error (printf "setupInput/HardLink\n- pid=%s\n- file=%s\n- sandbox=%s\n- loc=%s\n- err=%s"
+                     (show pid)
+                     (show file)
+                     (show sandbox)
+                     (show loc)
+                     (show err)
+                    )
 
     | (loc,digest) <- Map.toList m1
     ]
@@ -404,7 +423,14 @@ copyIntoCache loc = do
     False -> do
       Execute $ do
         XCopyFile loc file
+
+        -- experimental use of file sync....
+        let doSync = False
+        when doSync $ let Loc fd = file in XIO (syncFile fd)
+
         XMakeReadOnly file
+        pure ()
+
   pure digest
 
 linkIntoCache :: Loc -> B Digest
@@ -416,11 +442,12 @@ linkIntoCache loc = do
       True -> XTransferFileMode loc file
       False -> do
         XHardLink loc file >>= \case
-          True -> pure ()
-          False -> do
+          Nothing -> pure ()
+          Just err -> do
             -- job locking ensures this can't happen
-            error (printf "linkIntoCache/HardLink: failure: %s -> %s"
-                   (show loc) (show file))
+            error (printf "linkIntoCache/HardLink: failure: loc=%s, file=%s, err=%s"
+                   (show loc) (show file) (show err)
+                  )
     XMakeReadOnly file
   pure digest
 
@@ -724,7 +751,7 @@ data X a where
   XMakeReadOnly :: Loc -> X ()
   XReadFile :: Loc -> X String
   XWriteFile :: String -> Loc -> X ()
-  XHardLink :: Loc -> Loc -> X Bool -- False means it already exists
+  XHardLink :: Loc -> Loc -> X (Maybe String) -- Just contains error
   XUnLink :: Loc -> X ()
   XRemoveDirRecursive :: Loc -> X ()
 
@@ -821,12 +848,12 @@ runX Config{logMode,seePid,seeX,seeI} = loop
         removePathForcibly fp
 
 
-myCreateLink :: FilePath -> FilePath -> IO Bool
+myCreateLink :: FilePath -> FilePath -> IO (Maybe String)
 myCreateLink a b = do
   try (createLink a b) >>= \case
-    Right () -> pure True
+    Right () -> pure Nothing
     Left (_e::SomeException) -> do
-      pure False
+      pure (Just (show _e))
 
 safeRemoveLink :: FilePath -> IO ()
 safeRemoveLink fp = do

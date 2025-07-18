@@ -30,3 +30,4 @@ packages:
   echo filelock-0.1.1.7-8aPBuZyehnxF8XEBTCmp7F >>packages
   echo optparse-applicative-0.18.1.0-LXcIIut3swhp1EVFeyVj >>packages
   echo split-0.2.5-BYdGhwfKlUMIkYfmsLsm6k >>packages
+  echo safeio-0.0.6.0-AWkb1dAQnkv8rAlHZb4Z20 >>packages
