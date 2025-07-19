@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # blast parallel jenga builds, looking for odd behaviour
-JOBS=2
+JOBS=5
 
-scope=examples/01-two-files
+#scope=examples/01-two-files
 #scope=examples/02-discover-deps
-#scope=src
+scope=src
 
 rm -rf /tmp/.cache/jenga
 rm -f /tmp/blast.log*
@@ -29,7 +29,8 @@ while true; do
       for pid in $(cat /tmp/blast.log | grep ran | cut -d[ -f2- | cut -d] -f1); do
           cat /tmp/blast.log | sed "s|^.$pid. .*$||" > /tmp/blast.log.$pid
       done
-      cat /tmp/blast.log
+      #cat /tmp/blast.log
+      cat /tmp/blast.log | grep locked: | cut -d' ' -f2- | sort | uniq -c
       exit
   else
       echo
