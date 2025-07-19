@@ -272,12 +272,16 @@ doBuild config@Config{logMode} how = do
           Just digest -> pure digest
           Nothing -> do
             -- If not, someone has to run the job...
-            gainingLock wkd runJob >>= \case
-              Just digest -> pure digest
-              Nothing -> do
-                -- Another process beat us and is running the job.
+            tryGainingLock wkd $ \case
+              True -> do
+                -- We got the lock, so we run the job....
+                wtargets <- runJobAndSaveWitness config action wkd witKey wdeps rule
+                let digest = lookWitMap (locateKey sought) wtargets
+                pure digest
+              False -> do
+                -- Another process beat us to the lock; it's running the job.
                 awaitLockYielding wkd
-                -- Now they will have finished.
+                -- Now it will have finished.
                 verifyWitness sought wkd >>= \case
                   Just digest -> pure digest
                   Nothing ->
@@ -285,12 +289,9 @@ doBuild config@Config{logMode} how = do
                     -- We are too eager in expecting the witness trace to appear
                     -- TODO: perhaps we should spin for it?
                     error "other process encountered build failure"
-            where
-              runJob :: B Digest
-              runJob = do
-                wtargets <- runJobAndSaveWitness config action wkd witKey wdeps rule
-                let digest = lookWitMap (locateKey sought) wtargets
-                pure digest
+
+lockDebug :: Bool
+lockDebug = False
 
 awaitLockYielding :: WitKeyDigest -> B ()
 awaitLockYielding wkd = loop 0
@@ -298,30 +299,31 @@ awaitLockYielding wkd = loop 0
     loop :: Int -> B ()
     loop i = do
       BYield
-      let reportSpin = pure () --do Execute $ XLog (printf "L: spun (%d) for lock %s" i (show wkd))
-      gainingLock wkd reportSpin >>= \case
-        Nothing -> loop (i+1)
-        Just () -> pure ()
+      tryGainingLock wkd $ \case
+        False -> loop (i+1)
+        True -> do
+          when lockDebug $ Execute $ XLog (printf "L: spun (%d) awaiting lock %s" i (show wkd))
+          pure ()
 
-gainingLock :: WitKeyDigest -> B a -> B (Maybe a)
-gainingLock wkd critical = do
+tryGainingLock :: WitKeyDigest -> (Bool -> B a) -> B a
+tryGainingLock wkd f = do
   tracesDir <- tracesDir
   let Loc lockPath = tracesDir </> (show wkd ++ ".lock")
   -- Try to gain the lock...
   Execute (XIO (tryLockFile lockPath Exclusive)) >>= \case
     Just lock -> do
-      -- Execute $ XLog (printf "L: locked: %s" (show wkd))
+      when lockDebug $ Execute $ XLog (printf "L: locked: %s" (show wkd))
       -- Run the critical section while the lock is held.
-      res <- critical
+      res <- f True
       -- Critical section finished; release the lock (unlink and unlok).
       Execute $ do
         XUnLink (Loc lockPath)
         XIO (unlockFile lock)
-        --XLog (printf "L: unlocked %s" (show wkd))
-        pure (Just res)
+        when lockDebug $ XLog $ printf "L: unlocked %s" (show wkd)
+        pure res
     Nothing ->
       -- We lost the race; another process has the lock.
-      pure Nothing
+      f False
 
 
 runJobAndSaveWitness :: Config -> Action -> WitKeyDigest -> WitnessKey -> WitMap -> Rule -> B WitMap
@@ -411,7 +413,9 @@ hardLinkRetry1 src dest =  do
       -- XLogErr _e1
       XTryHardLink src dest >>= \case
         Nothing -> pure ()
-        Just e2 -> error e2 -- hard error for error on 2nd attempt
+        Just e2 ->
+          -- TODO: I don't think we can assume we only need a single retry
+          error e2 -- hard error for error on 2nd attempt
 
 cacheOutputs :: Loc -> Rule -> B WitMap
 cacheOutputs sandbox Rule{rulename,targets} = do
