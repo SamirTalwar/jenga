@@ -267,45 +267,62 @@ doBuild config@Config{logMode} how = do
         let witKey = WitnessKey { commands, wdeps }
         let wkd = digestWitnessKey witKey
 
+        -- If the witness trace already exists, use it.
         verifyWitness sought wkd >>= \case
-          Just digest -> do
-            pure digest
-
+          Just digest -> pure digest
           Nothing -> do
-            -- TODO: abstract job locking code
-            --Execute $ XLog (printf "L: trying for %s" (show wkd))
-            tracesDir <- tracesDir
-            let Loc lockPath = tracesDir </> (show wkd ++ ".lock")
-            Execute (XIO (tryLockFile lockPath Exclusive)) >>= \case
-              Just lock -> do
-                --Execute $ XLog (printf "L: obtained %s" (show wkd))
+            -- If not, someone has to run the job...
+            gainingLock wkd runJob >>= \case
+              Just digest -> pure digest
+              Nothing -> do
+                -- Another process beat us and is running the job.
+                awaitLockYielding wkd
+                -- Now they will have finished.
+                verifyWitness sought wkd >>= \case
+                  Just digest -> pure digest
+                  Nothing ->
+                    -- This may also occur when the the build does not fail
+                    -- We are too eager in expecting the witness trace to appear
+                    -- TODO: perhaps we should spin for it?
+                    error "other process encountered build failure"
+            where
+              runJob :: B Digest
+              runJob = do
                 wtargets <- runJobAndSaveWitness config action wkd witKey wdeps rule
                 let digest = lookWitMap (locateKey sought) wtargets
-                Execute $ do
-                  XUnLink (Loc lockPath)
-                  XIO (unlockFile lock)
-                  --XLog (printf "L: unlocked %s" (show wkd))
                 pure digest
 
-              Nothing -> do
-                BYield
-                let
-                  awaitLock :: Int -> B Digest
-                  awaitLock i =
-                    Execute (XIO (tryLockFile lockPath Exclusive)) >>= \case
-                    Nothing -> do BYield; awaitLock (i+1) -- spins if this is the only blocked job
-                    Just lock -> do
-                      --Execute $ XLog (printf "L: finally (%d) obtain %s" i (show wkd))
-                      Execute $ do
-                        XUnLink (Loc lockPath)
-                        XIO (unlockFile lock)
-                      verifyWitness sought wkd >>= \case
-                        Just digest -> do
-                          --Execute $ XLog (printf "L: witness finally exists for %s" (show wkd))
-                          pure digest
-                        Nothing -> do
-                          error "other process encountered build failure"
-                awaitLock 0
+awaitLockYielding :: WitKeyDiget -> B ()
+awaitLockYielding wkd = loop 0
+  where
+    loop :: Int -> B ()
+    loop i = do
+      BYield
+      let reportSpin = pure () --do Execute $ XLog (printf "L: spun (%d) for lock %s" i (show wkd))
+      gainingLock wkd reportSpin >>= \case
+        Nothing -> loop (i+1)
+        Just () -> pure ()
+
+gainingLock :: WitKeyDiget -> B a -> B (Maybe a)
+gainingLock wkd critical = do
+  tracesDir <- tracesDir
+  let Loc lockPath = tracesDir </> (show wkd ++ ".lock")
+  -- Try to gain the lock...
+  Execute (XIO (tryLockFile lockPath Exclusive)) >>= \case
+    Just lock -> do
+      -- Execute $ XLog (printf "L: locked: %s" (show wkd))
+      -- Run the critical section while the lock is held.
+      res <- critical
+      -- Critical section finished; release the lock (unlink and unlok).
+      Execute $ do
+        XUnLink (Loc lockPath)
+        XIO (unlockFile lock)
+        --XLog (printf "L: unlocked %s" (show wkd))
+        pure (Just res)
+    Nothing ->
+      -- We lost the race; another process has the lock.
+      pure Nothing
+
 
 runJobAndSaveWitness :: Config -> Action -> WitKeyDiget -> WitnessKey -> WitMap -> Rule -> B WitMap
 runJobAndSaveWitness config action wkd witKey wdeps rule = do
