@@ -25,6 +25,7 @@ import System.Posix.Process (forkProcess)
 import System.Process (shell,callProcess,readCreateProcess,readCreateProcessWithExitCode,getCurrentPid)
 import Text.Printf (printf)
 import Text.Read (readMaybe)
+import System.IO.SafeWrite (syncFile)
 
 ----------------------------------------------------------------------
 -- Engine main
@@ -859,8 +860,11 @@ runX config@Config{logMode,seeX,seeI,seeD} = loop
         removePathForcibly fp
 
 writeFileFlush :: FilePath -> String -> IO ()
-writeFileFlush fp str =
+writeFileFlush fp str = do
   withFile fp WriteMode $ \h -> do hPutStr h str; hFlush h
+  -- Enabling this prevents lock racing & duplicate actions. But it is a big slow sledgehammer!
+  when False $ syncFile fp
+  pure ()
 
 tryCreateLink :: FilePath -> FilePath -> IO (Maybe String)
 tryCreateLink a b = do
