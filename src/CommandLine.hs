@@ -15,6 +15,7 @@ data Config = Config
   , logMode :: LogMode
   , seeX :: Bool
   , seeI :: Bool
+  , seeD :: Bool
   , buildMode :: BuildMode
   , args :: [FilePath]
   }
@@ -150,3 +151,4 @@ sharedOptions defaultLogMode = Config
   )
   <*> switch (short 'x' <> help "(DEV) Log execution of externally run commands")
   <*> switch (short 'i' <> help "(DEV) Log execution of internal file system access")
+  <*> switch (long "debug" <> help "(DEV) Log debug lines")

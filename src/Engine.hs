@@ -19,7 +19,7 @@ import System.Environment (lookupEnv)
 import System.Exit(ExitCode(..))
 import System.FileLock (tryLockFile,SharedExclusive(Exclusive),unlockFile)
 import System.FilePath qualified as FP
-import System.IO (hFlush,hPutStrLn,stderr)
+import System.IO (hFlush,hPutStrLn,stderr,stdout,withFile,IOMode(WriteMode),hPutStr)
 import System.Posix.Files (fileExist,createLink,removeLink,getFileStatus,fileMode,intersectFileModes,setFileMode,getFileStatus,isDirectory)
 import System.Posix.Process (forkProcess)
 import System.Process (shell,callProcess,readCreateProcess,readCreateProcessWithExitCode,getCurrentPid)
@@ -50,7 +50,7 @@ engineMain userProg = do
         pure (Loc dir  </> ".cache/jenga")
       CacheDirTemp -> do
         let loc = Loc (printf "/tmp/.cache/jenga/%s" (show myPid))
-        when see $ printf "using temporary cache: %s\n" (show loc)
+        when see $ putOut (printf "using temporary cache: %s" (show loc))
         pure loc
 
   elaborateAndBuild cacheDir config userProg
@@ -240,7 +240,7 @@ locateKey (Key (Loc fp)) = Loc (FP.takeFileName fp)
 -- Build
 
 doBuild :: Config -> How -> Key -> B Digest
-doBuild config@Config{logMode} how = do
+doBuild config@Config{logMode,seeD} how = do
   -- TODO: document this flow.
   -- TODO: check for cycles.
   memoDigestByKey $ \sought -> do
@@ -268,19 +268,22 @@ doBuild config@Config{logMode} how = do
         let wkd = digestWitnessKey witKey
 
         -- If the witness trace already exists, use it.
+        when seeD $ Execute $ XLog (printf "L: looking for witness: %s" (show wkd))
         verifyWitness sought wkd >>= \case
           Just digest -> pure digest
           Nothing -> do
             -- If not, someone has to run the job...
-            tryGainingLock wkd $ \case
+            when seeD $ Execute $ XLog (printf "L: no witness; job must be run: %s" (show wkd))
+            tryGainingLock seeD wkd $ \case
               True -> do
                 -- We got the lock, so we run the job....
                 wtargets <- runJobAndSaveWitness config action wkd witKey wdeps rule
                 let digest = lookWitMap (locateKey sought) wtargets
                 pure digest
               False -> do
+                when seeD $ Execute $ XLog (printf "L: running elsewhere: %s" (show wkd))
                 -- Another process beat us to the lock; it's running the job.
-                awaitLockYielding wkd
+                awaitLockYielding config wkd
                 -- Now it will have finished.
                 verifyWitness sought wkd >>= \case
                   Just digest -> pure digest
@@ -290,41 +293,37 @@ doBuild config@Config{logMode} how = do
                     -- TODO: perhaps we should spin for it?
                     error "other process encountered build failure"
 
-lockDebug :: Bool
-lockDebug = False
-
-awaitLockYielding :: WitKeyDigest -> B ()
-awaitLockYielding wkd = loop 0
+awaitLockYielding :: Config -> WitKeyDigest -> B ()
+awaitLockYielding Config{seeD} wkd = loop 0
   where
     loop :: Int -> B ()
     loop i = do
       BYield
-      tryGainingLock wkd $ \case
+      tryGainingLock False wkd $ \case
         False -> loop (i+1)
         True -> do
-          when lockDebug $ Execute $ XLog (printf "L: spun (%d) awaiting lock %s" i (show wkd))
+          when seeD $ Execute $ XLog (printf "L: spun (%d) awaiting lock %s" i (show wkd))
           pure ()
 
-tryGainingLock :: WitKeyDigest -> (Bool -> B a) -> B a
-tryGainingLock wkd f = do
+tryGainingLock :: Bool -> WitKeyDigest -> (Bool -> B a) -> B a
+tryGainingLock debug wkd f = do
   tracesDir <- tracesDir
   let Loc lockPath = tracesDir </> (show wkd ++ ".lock")
   -- Try to gain the lock...
   Execute (XIO (tryLockFile lockPath Exclusive)) >>= \case
     Just lock -> do
-      when lockDebug $ Execute $ XLog (printf "L: locked: %s" (show wkd))
+      when debug $ Execute $ XLog (printf "L: locked: %s" (show wkd))
       -- Run the critical section while the lock is held.
       res <- f True
       -- Critical section finished; release the lock (unlink and unlok).
       Execute $ do
         XUnLink (Loc lockPath)
         XIO (unlockFile lock)
-        when lockDebug $ XLog $ printf "L: unlocked %s" (show wkd)
+        when debug $ XLog $ printf "L: unlocked %s" (show wkd)
         pure res
     Nothing ->
       -- We lost the race; another process has the lock.
       f False
-
 
 runJobAndSaveWitness :: Config -> Action -> WitKeyDigest -> WitnessKey -> WitMap -> Rule -> B WitMap
 runJobAndSaveWitness config action wkd witKey wdeps rule = do
@@ -770,16 +769,17 @@ data X a where
   XRemoveDirRecursive :: Loc -> X ()
 
 runX :: Config -> X a -> IO a
-runX config@Config{logMode,seeX,seeI} = loop
+runX config@Config{logMode,seeX,seeI,seeD} = loop
   where
 
-    log mes = maybePrefixPid config mes >>= putStrLn
+    log mes = maybePrefixPid config mes >>= putOut
 
     seeA = case logMode of LogQuiet -> False; _ -> True
-    logA,logX,logI :: String -> IO ()
+    logA,logX,logI,logD :: String -> IO ()
     logA mes = when seeA $ log (printf "A: %s" mes)
     logX mes = when seeX $ log (printf "X: %s" mes)
     logI mes = when seeI $ log (printf "I: %s" mes)
+    logD mes = when seeD $ log (printf "L: %s" mes) -- locking debug
 
     loop :: X a -> IO a
     loop x = case x of
@@ -846,8 +846,8 @@ runX config@Config{logMode,seeX,seeI} = loop
         logI $ printf "cat %s" fp
         readFile fp
       XWriteFile contents (Loc dest) -> do
-        logI $ printf "cat> %s" dest
-        writeFile dest contents
+        logD $ printf "cat> %s" dest
+        writeFileFlush dest contents
       XTryHardLink (Loc src) (Loc dest) -> do
         logI $ printf "ln %s %s" src dest
         tryCreateLink src dest
@@ -857,6 +857,10 @@ runX config@Config{logMode,seeX,seeI} = loop
       XRemoveDirRecursive (Loc fp) -> do
         logI $ printf "rm -rf %s" fp
         removePathForcibly fp
+
+writeFileFlush :: FilePath -> String -> IO ()
+writeFileFlush fp str =
+  withFile fp WriteMode $ \h -> do hPutStr h str; hFlush h
 
 tryCreateLink :: FilePath -> FilePath -> IO (Maybe String)
 tryCreateLink a b = do
@@ -892,4 +896,10 @@ putErr :: String -> IO ()
 putErr s = do
   hPutStrLn stderr s
   hFlush stderr
+  pure ()
+
+putOut :: String -> IO ()
+putOut s = do
+  hPutStrLn stdout s
+  hFlush stdout
   pure ()
