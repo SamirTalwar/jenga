@@ -292,7 +292,7 @@ doBuild config@Config{logMode} how = do
                 let digest = lookWitMap (locateKey sought) wtargets
                 pure digest
 
-awaitLockYielding :: WitKeyDiget -> B ()
+awaitLockYielding :: WitKeyDigest -> B ()
 awaitLockYielding wkd = loop 0
   where
     loop :: Int -> B ()
@@ -303,7 +303,7 @@ awaitLockYielding wkd = loop 0
         Nothing -> loop (i+1)
         Just () -> pure ()
 
-gainingLock :: WitKeyDiget -> B a -> B (Maybe a)
+gainingLock :: WitKeyDigest -> B a -> B (Maybe a)
 gainingLock wkd critical = do
   tracesDir <- tracesDir
   let Loc lockPath = tracesDir </> (show wkd ++ ".lock")
@@ -324,7 +324,7 @@ gainingLock wkd critical = do
       pure Nothing
 
 
-runJobAndSaveWitness :: Config -> Action -> WitKeyDiget -> WitnessKey -> WitMap -> Rule -> B WitMap
+runJobAndSaveWitness :: Config -> Action -> WitKeyDigest -> WitnessKey -> WitMap -> Rule -> B WitMap
 runJobAndSaveWitness config action wkd witKey wdeps rule = do
   wtargets <- buildWithRule config action wdeps rule
   let val = WitnessValue { wtargets }
@@ -484,18 +484,18 @@ data WitnessKey = WitnessKey { commands :: [String], wdeps :: WitMap } deriving 
 data WitMap = WitMap (Map Loc Digest) deriving Show
 
 -- message digest of a witness key; computer by internal MD5 code
-data WitKeyDiget = WitKeyDiget String
+data WitKeyDigest = WitKeyDigest String
 
-instance Show WitKeyDiget where show (WitKeyDiget str) = str
+instance Show WitKeyDigest where show (WitKeyDigest str) = str
 
 lookWitMap :: Loc -> WitMap -> Digest
 lookWitMap loc (WitMap m) = maybe err id $ Map.lookup loc m
   where err = error "lookWitMap"
 
-digestWitnessKey :: WitnessKey -> WitKeyDiget
-digestWitnessKey wk = WitKeyDiget (MD5.md5s (MD5.Str (show wk)))
+digestWitnessKey :: WitnessKey -> WitKeyDigest
+digestWitnessKey wk = WitKeyDigest (MD5.md5s (MD5.Str (show wk)))
 
-verifyWitness :: Key -> WitKeyDiget -> B (Maybe Digest)
+verifyWitness :: Key -> WitKeyDigest -> B (Maybe Digest)
 verifyWitness sought wkd = do
   lookupWitness wkd >>= \case
     Nothing -> pure Nothing
@@ -510,7 +510,7 @@ verifyWitness sought wkd = do
         -- the user action will have to be rerun.
         pure $ Map.lookup (locateKey sought) m
 
-lookupWitness :: WitKeyDiget -> B (Maybe Witness)
+lookupWitness :: WitKeyDigest -> B (Maybe Witness)
 lookupWitness wkd = do
   witFile <- witnessFile wkd
   Execute (XFileExists witFile) >>= \case
@@ -528,13 +528,13 @@ existsCacheFile digest = do
   file <- cacheFile digest
   Execute (XFileExists file)
 
-saveWitness :: WitKeyDiget -> Witness -> B ()
+saveWitness :: WitKeyDigest -> Witness -> B ()
 saveWitness wkd wit = do
   witFile <- witnessFile wkd
   Execute $ do
     XWriteFile (exportWitness wit ++ "\n") witFile
 
-witnessFile :: WitKeyDiget -> B Loc
+witnessFile :: WitKeyDigest -> B Loc
 witnessFile wkd = do
   tracesDir <- tracesDir
   pure (tracesDir </> show wkd)
