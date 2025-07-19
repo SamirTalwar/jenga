@@ -1,13 +1,14 @@
 #!/bin/bash
 
 # blast parallel jenga builds, looking for odd behaviour
-JOBS=2
+JOBS=3
 
 #scope=examples/01-two-files
 scope=examples/02-discover-deps
 #scope=src
 
 rm -rf /tmp/.cache/jenga
+install-jenga
 
 expect=$(jenga build -fp $scope -j1 | grep ran | cut -d' ' -f3 | paste -sd+ | bc)
 echo "expect:" $expect

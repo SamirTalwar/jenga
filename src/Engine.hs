@@ -19,13 +19,12 @@ import System.Environment (lookupEnv)
 import System.Exit(ExitCode(..))
 import System.FileLock (tryLockFile,SharedExclusive(Exclusive),unlockFile)
 import System.FilePath qualified as FP
+import System.IO (hFlush,hPutStrLn,stderr)
 import System.Posix.Files (fileExist,createLink,removeLink,getFileStatus,fileMode,intersectFileModes,setFileMode,getFileStatus,isDirectory)
 import System.Posix.Process (forkProcess)
 import System.Process (shell,callProcess,readCreateProcess,readCreateProcessWithExitCode,getCurrentPid)
 import Text.Printf (printf)
 import Text.Read (readMaybe)
-
-import System.IO.SafeWrite (syncFile)
 
 ----------------------------------------------------------------------
 -- Engine main
@@ -149,7 +148,7 @@ materialize digest key = do
   let materializedFile = artifactsDir </> show key
   Execute $ do
     XMakeDir (dirLoc materializedFile)
-    XHardLink cacheFile materializedFile >>= \case
+    XTryHardLink cacheFile materializedFile >>= \case
       Nothing -> pure ()
       Just{} -> do
         -- Likely from concurrently runnning jenga
@@ -270,21 +269,21 @@ doBuild config@Config{logMode} how = do
 
         verifyWitness sought wkd >>= \case
           Just digest -> do
-            --Execute $ XLog (printf "L: witness already exists for %s" (show wkd))
             pure digest
 
           Nothing -> do
+            -- TODO: abstract job locking code
             --Execute $ XLog (printf "L: trying for %s" (show wkd))
             tracesDir <- tracesDir
             let Loc lockPath = tracesDir </> (show wkd ++ ".lock")
             Execute (XIO (tryLockFile lockPath Exclusive)) >>= \case
-              Just _lock -> do
+              Just lock -> do
                 --Execute $ XLog (printf "L: obtained %s" (show wkd))
                 wtargets <- runJobAndSaveWitness config action wkd witKey wdeps rule
                 let digest = lookWitMap (locateKey sought) wtargets
                 Execute $ do
-                  XUnLink (Loc lockPath) -- unlink before unlock -- TODO: why must we unlink?
-                  XIO (unlockFile _lock) -- never unlock?
+                  XUnLink (Loc lockPath)
+                  XIO (unlockFile lock)
                   --XLog (printf "L: unlocked %s" (show wkd))
                 pure digest
 
@@ -297,16 +296,16 @@ doBuild config@Config{logMode} how = do
                     Nothing -> do BYield; awaitLock (i+1) -- spins if this is the only blocked job
                     Just lock -> do
                       --Execute $ XLog (printf "L: finally (%d) obtain %s" i (show wkd))
-                      Execute $ XIO (unlockFile lock)
+                      Execute $ do
+                        XUnLink (Loc lockPath)
+                        XIO (unlockFile lock)
                       verifyWitness sought wkd >>= \case
                         Just digest -> do
                           --Execute $ XLog (printf "L: witness finally exists for %s" (show wkd))
                           pure digest
                         Nothing -> do
-                          --Execute $ XLog "other process encountered build failure"
                           error "other process encountered build failure"
                 awaitLock 0
-
 
 runJobAndSaveWitness :: Config -> Action -> WitKeyDiget -> WitnessKey -> WitMap -> Rule -> B WitMap
 runJobAndSaveWitness config action wkd witKey wdeps rule = do
@@ -376,28 +375,26 @@ buildWithRule Config{keepSandBoxes} action depWit rule = do
       when (not keepSandBoxes) $ Execute (XRemoveDirRecursive sandbox)
       pure targetWit
 
-
 setupInputs :: Loc -> WitMap -> B ()
 setupInputs sandbox (WitMap m1) = do
   sequence_
     [ do
-        file <- cacheFile digest
-        Execute $ do
-          XHardLink file (sandbox </> show loc) >>= \case
-            Nothing -> pure ()
-            Just err -> do
-               -- nothing ought to be racing us!
-              pid <- XIO getCurrentPid
-              error (printf "setupInput/HardLink\n- pid=%s\n- file=%s\n- sandbox=%s\n- loc=%s\n- err=%s"
-                     (show pid)
-                     (show file)
-                     (show sandbox)
-                     (show loc)
-                     (show err)
-                    )
-
+        src <- cacheFile digest
+        let dest = sandbox </> show loc
+        Execute $ hardLinkRetry1 src dest
     | (loc,digest) <- Map.toList m1
     ]
+
+hardLinkRetry1 :: Loc -> Loc -> X ()
+hardLinkRetry1 src dest =  do
+  XTryHardLink src dest >>= \case
+    Nothing -> pure ()
+    Just _e1 -> do
+      -- Sometimes the hardlink fails; but it works on retry. Why?
+      -- XLogErr _e1
+      XTryHardLink src dest >>= \case
+        Nothing -> pure ()
+        Just e2 -> error e2 -- hard error for error on 2nd attempt
 
 cacheOutputs :: Loc -> Rule -> B WitMap
 cacheOutputs sandbox Rule{rulename,targets} = do
@@ -423,11 +420,6 @@ copyIntoCache loc = do
     False -> do
       Execute $ do
         XCopyFile loc file
-
-        -- experimental use of file sync....
-        let doSync = False
-        when doSync $ let Loc fd = file in XIO (syncFile fd)
-
         XMakeReadOnly file
         pure ()
 
@@ -441,7 +433,7 @@ linkIntoCache loc = do
     XFileExists file >>= \case
       True -> XTransferFileMode loc file
       False -> do
-        XHardLink loc file >>= \case
+        XTryHardLink loc file >>= \case
           Nothing -> pure ()
           Just err -> do
             -- job locking ensures this can't happen
@@ -737,6 +729,7 @@ data X a where
   XRet :: a -> X a
   XBind :: X a -> (a -> X b) -> X b
   XLog :: String -> X ()
+  XLogErr :: String -> X ()
   XIO :: IO a -> X a
 
   XRunActionInDir :: Loc -> Action -> X Bool
@@ -751,19 +744,15 @@ data X a where
   XMakeReadOnly :: Loc -> X ()
   XReadFile :: Loc -> X String
   XWriteFile :: String -> Loc -> X ()
-  XHardLink :: Loc -> Loc -> X (Maybe String) -- Just contains error
+  XTryHardLink :: Loc -> Loc -> X (Maybe String)
   XUnLink :: Loc -> X ()
   XRemoveDirRecursive :: Loc -> X ()
 
 runX :: Config -> X a -> IO a
-runX Config{logMode,seePid,seeX,seeI} = loop
+runX config@Config{logMode,seeX,seeI} = loop
   where
-    log mes = do
-      case seePid of
-        False -> putStrLn mes
-        True -> do
-          myPid <- getCurrentPid
-          printf "[%s] %s\n" (show myPid) mes
+
+    log mes = maybePrefixPid config mes >>= putStrLn
 
     seeA = case logMode of LogQuiet -> False; _ -> True
     logA,logX,logI :: String -> IO ()
@@ -777,6 +766,7 @@ runX Config{logMode,seePid,seeX,seeI} = loop
       XBind m f -> do a <- loop m; loop (f a)
       XIO io -> io
       XLog mes -> log mes
+      XLogErr mes -> maybePrefixPid config mes >>= putErr
 
       -- sandboxed execution of user's action; for now always a bash command
       XRunActionInDir (Loc dir) Action{hidden,commands} -> all id <$> do
@@ -837,9 +827,9 @@ runX Config{logMode,seePid,seeX,seeI} = loop
       XWriteFile contents (Loc dest) -> do
         logI $ printf "cat> %s" dest
         writeFile dest contents
-      XHardLink (Loc src) (Loc dest) -> do
+      XTryHardLink (Loc src) (Loc dest) -> do
         logI $ printf "ln %s %s" src dest
-        myCreateLink src dest
+        tryCreateLink src dest
       XUnLink (Loc fp) -> do
         logI $ printf "rm -f %s" fp
         safeRemoveLink fp
@@ -847,12 +837,12 @@ runX Config{logMode,seePid,seeX,seeI} = loop
         logI $ printf "rm -rf %s" fp
         removePathForcibly fp
 
-
-myCreateLink :: FilePath -> FilePath -> IO (Maybe String)
-myCreateLink a b = do
+tryCreateLink :: FilePath -> FilePath -> IO (Maybe String)
+tryCreateLink a b = do
   try (createLink a b) >>= \case
     Right () -> pure Nothing
     Left (_e::SomeException) -> do
+      --putErr (show _e)
       pure (Just (show _e))
 
 safeRemoveLink :: FilePath -> IO ()
@@ -860,7 +850,7 @@ safeRemoveLink fp = do
   try (removeLink fp) >>= \case
     Right () -> pure ()
     Left (_e::SomeException) -> do
-      printf "safeRemoveLink: caught %s\n" (show _e)
+      --putErr (show _e)
       pure ()
 
 nCopies :: Int -> IO () -> IO ()
@@ -868,3 +858,17 @@ nCopies n io =
   if n < 1 then error "nCopies<1" else do
     sequence_ $ replicate (n-1) $ do _ <- forkProcess io; pure ()
     io
+
+maybePrefixPid :: Config -> String -> IO String
+maybePrefixPid Config{seePid} mes = do
+  case seePid of
+    False -> pure mes
+    True -> do
+      myPid <- getCurrentPid
+      pure $ printf "[%s] %s" (show myPid) mes
+
+putErr :: String -> IO ()
+putErr s = do
+  hPutStrLn stderr s
+  hFlush stderr
+  pure ()
